@@ -1,0 +1,619 @@
+---
+title: "National trend analysis using migration counts and stable isotopes"
+author: "Dave Iles"
+date: "September 24, 2019"
+fontsize: 10pt
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+
+---
+
+```{r setup, include=FALSE}
+
+#Setup options
+knitr::opts_chunk$set(echo = FALSE, include = FALSE, message = FALSE,
+                      fig.width=4, fig.height=3,dpi=300)
+
+library(gstat)
+library(viridis)
+library(ggplot2)
+library(reshape2)
+library(jagsUI)
+
+setwd("~/1_Work/ECCC/CMMN/scripts")
+
+rm(list=ls())
+
+seed = runif(1,0,1000)
+set.seed(928)
+
+```
+
+## Generation of data
+
+```{r}
+
+#Define landscape
+nregion = 2
+
+col.pal = RColorBrewer::brewer.pal(nregion,"Paired")
+
+trend = data.frame(region = 1:nregion,trend = rnorm(nregion,-0.06,0.1))
+#trend = data.frame(region = 1:nregion,trend = c(-0.05,0.05))
+```
+
+
+Assume there are `r nregion` regions (e.g., BCRs), each with a different mean trend:
+
+
+```{r, include = TRUE, message = FALSE}
+trend.plot = ggplot(data = trend) +
+  geom_point(aes(x = factor(region), y = trend, col = factor(region)), shape = 19, size = 5)+
+  geom_hline(yintercept = 0, linetype = 2)+
+  scale_color_manual(values=col.pal, name = "Region", guide = FALSE)+
+  xlab("Region")+
+  ylab("Trend")+
+  theme_bw()
+
+print(trend.plot)
+```
+
+
+```{r}
+#Simulate initial abundance in each region
+logN0 = data.frame(region = 1:nregion, logN0 = rnorm(nregion,log(50000),0.5))
+```
+
+
+Assume each region has a different initial abundance:
+
+
+```{r, include = TRUE, message = FALSE}
+N0.plot = ggplot(data = logN0) +
+  geom_bar(aes(x = factor(region), y = exp(logN0), fill = factor(region)), stat = "identity")+
+  xlab("Region")+
+  ylab("Initial Regional Abundance")+
+  scale_fill_manual(values=col.pal, name = "Region", guide = FALSE)+
+  #ggtitle("Regional Abundance")+
+  theme_bw()
+print(N0.plot)
+```
+
+```{r, include = FALSE}
+
+#Project population dynamics in each region
+T = 20 #Length of simulation
+proc.sd = 0.1
+
+N.df = expand.grid(t = 1:T,region = 1:nregion)
+N.df = merge(N.df, trend)
+N.df = merge(N.df, logN0)
+
+for (i in 1:nrow(N.df)) N.df$logN[i] = N.df$logN0[i] + (N.df$t[i]-1)*N.df$trend[i] + rnorm(1,0,proc.sd)
+N.df$N = round(exp(N.df$logN))
+
+#Calculate total N across the simulation
+N.sum = aggregate(N~t, data = N.df, FUN = sum)
+N.sum$logN = log(N.sum$N)
+```
+
+
+Assume there is additional temporal variation in mean trends at each site (i.e., random year effects).  The resulting dynamics in each region over `r T` years are:
+
+
+```{r, include = TRUE, message = FALSE, fig.width = 6}
+N.plot = ggplot(data = N.df) +
+  geom_line(aes(x = t, y = N, col = factor(region)))+
+  scale_color_manual(values=col.pal, name = "Region")+
+  xlab("Year")+
+  ylab("Abundance")+
+  theme_bw()
+print(N.plot)
+```
+
+
+The sum of all regional abundances at each time step is the national abundance:
+
+
+```{r, include = TRUE, message = FALSE}
+N.sum.plot = ggplot(data = N.sum) +
+  geom_line(aes(x = t, y = N), linetype = 2)+
+  xlab("Year")+
+  ylab("National abundance")+
+  theme_bw()
+print(N.sum.plot)
+
+```
+
+
+
+```{r}
+
+#Define a series of monitoring stations
+nstation = 4
+
+#For each station, define a migrantment area (probability that it samples each region)
+migrant.mat = matrix(NA, nrow = nregion, ncol = nstation)
+
+#nregion x nstation matrix.  each cell describes the probability that the station j samples region i
+migrant.mat = c()
+for (r in 1:nregion){
+
+  p = rep(0,nstation)
+  stations.used = sample(1:nstation,round(runif(1,1,4)))
+  p[stations.used] = runif(length(stations.used),0.001,0.03)
+  migrant.mat = rbind(migrant.mat, p)
+  
+}
+
+migrant.mat = t(migrant.mat)
+colnames(migrant.mat) = seq(1:nregion)
+rownames(migrant.mat) = seq(1:nstation)
+colSums(migrant.mat) #colSums are the total proportion of each region captured at stations
+
+migrant.df = melt(migrant.mat)
+colnames(migrant.df) = c("station","region","p")
+```
+
+
+Assume there are `r nstation` migration stations that potentially capture birds from each region. Each station potentially monitors a mix of birds from multiple regions. The parameter $\rho[r,s]$ describes the proportion of birds from region $r$ that are captured at station $s$.  This proportion will be very small, and most birds are not captured at any stations.
+
+
+```{r, include = TRUE, message = FALSE}
+migrant.plot = ggplot(data = migrant.df) +
+  geom_line(aes(x = station, y = p, col = factor(region)))+
+  scale_color_manual(values=col.pal, name = "region")+
+  ylab("Capture probability (rho)")+
+  facet_grid(region~.)+
+  geom_hline(yintercept = 0, linetype = 2)+
+  theme_bw()
+#print(migrant.plot)
+
+prop_reg1 = sum(subset(migrant.df, region == 1)$p)
+prop_reg3 = sum(subset(migrant.df, region == 3)$p)
+```
+
+```{r}
+
+migrant.df2 = migrant.df
+migrant.df2$p[which(migrant.df2$p == 0)] = NA
+migrant.plot2 = ggplot(data = migrant.df2) +
+  
+  geom_point(aes(x = region, y = 2, col = factor(region)), shape = 18, size = 10)+
+  geom_point(aes(x = station, y = 1), shape = 2, size = 3)+
+  
+  geom_segment(aes(x = region, y = 2, xend = station, yend = 1, size = p, col = factor(region)), arrow = arrow(length = unit(0.03, "npc")), alpha = 0.4, na.rm=TRUE)+
+  scale_size_continuous(limits = c(0.001,0.05), breaks = seq(0,0.05,length.out = 5), range = c(0,8), name = expression(rho))+
+  scale_color_manual(values=col.pal, name = "Region", guide = FALSE)+
+  xlab("")+
+  ylab("")+
+  scale_y_continuous(breaks = c(1,2), labels = c("Station","Region"))+
+  scale_x_continuous(breaks = seq(1,nstation))+
+  theme_bw()+
+  
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  #ggtitle("Migration map")
+```
+
+
+The following figure illustrates the proportion of birds originating from each of the `r nregion` regions that are captured at each of the `r nstation` stations:
+
+
+```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 4}
+print(migrant.plot2)
+
+```
+
+
+```{r}
+
+N.region.station = expand.grid(t = 1:T, station = 1:nstation, region = 1:nregion)
+N.region.station = merge(N.region.station, N.df, by.x = c("t","region"), by.y = c("t","region"))
+N.region.station = merge(N.region.station, migrant.df, by.x = c("region","station"), by.y = c("region","station"))
+```
+
+```{r}
+#Incorporate temporal variation in rho
+
+rho.sd = 0
+N.region.station$p = plogis(qlogis(N.region.station$p) + rnorm(nrow(N.region.station),0,rho.sd))
+```
+
+```{r}
+#N.region.station$N.captured = N.region.station$N * N.region.station$p 
+
+N.region.station$N.captured = rbinom(nrow(N.region.station), N.region.station$N,N.region.station$p)
+
+N.region.station$logN = log(N.region.station$N)
+
+#Total number of birds caught each year at each station
+N.station = aggregate(N.captured ~ t + station, data = N.region.station, FUN = sum)
+colnames(N.station)[3] = "N.captured.total"
+N.region.station = merge(N.region.station, N.station)
+
+#Proportion caught at each station arriving from each region
+N.region.station$prop = N.region.station$N.captured/N.region.station$N.captured.total
+
+#Organize dataframe
+N.region.station = N.region.station[order(N.region.station$station,N.region.station$t,N.region.station$region),]
+```
+
+
+The total number of birds captured at each station in each year, originating from each region, is plotted below:
+
+
+```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 5}
+#Total number of birds caught at each station over time
+N.station.plot = ggplot(data = N.station) +
+  geom_bar(aes(x = t, y = N.captured.total), fill = "gray75", stat = "identity", alpha = 0.7)+
+  facet_grid(station~., scales = "free")+
+  ylab("Total birds counted per season")+
+  xlab("Year")+
+  #ggtitle("Total birds captured per year at each station")+
+  theme_bw()
+#print(N.station.plot)
+
+capture.plot = ggplot(data = N.region.station) +
+  geom_bar(aes(x = t, y = N.captured, fill = factor(region)), stat = "identity", alpha = 0.7)+
+  scale_fill_manual(values=col.pal, name = "Region")+
+  facet_grid(station~., scales = "free")+
+  ylab("Total birds counted per season")+
+  xlab("Year")+
+  #ggtitle("True composition of captures at each station")+
+  theme_bw()
+
+print(capture.plot)
+```
+
+
+Trends differ among stations, resulting from differences in their catchment. The composition of birds at each station also changes through time.
+
+
+## Data required to estimate national trends using CMMN:
+
+A model to estimate national trends can be fit using 3 key pieces of information:
+
+1) Total numbers of birds captured in each year of study at each station.  In practice, these "seasonal totals" are not known and must be estimated using a state-space model such as in Crewe et al. (2016).  In this simulated example, I assume we can estimate seasonal totals with a SE of 5%.   
+
+
+```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 5}
+
+print(N.station.plot)
+
+```
+
+
+
+```{r}
+isotope_years = c(5)
+```
+
+2) Composition of birds at each station (catchment data from stable isotopes) in at least one year (in this case, year `r isotope_years`):
+
+```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 5}
+
+N.region.station2 = N.region.station
+N.region.station2$N.captured[which(N.region.station2$t %in% isotope_years == FALSE)] = NA
+
+capture.plot2 = ggplot() +
+  geom_bar(data = subset(N.region.station, t %in% isotope_years == FALSE), aes(x = t, y = N.captured), fill = "gray75", stat = "identity", alpha = 0.7)+
+  
+  geom_bar(data = N.region.station2, aes(x = t, y = N.captured, fill = factor(region)), stat = "identity", alpha = 0.7)+
+  scale_fill_manual(values=col.pal, name = "Region")+
+  
+  facet_grid(station~., scales = "free")+
+  ylab("Total birds counted per season")+
+  xlab("Year")+
+  #ggtitle("Composition of captures measured in a single year")+
+  
+  theme_bw()
+
+print(capture.plot2)
+
+```
+
+3) Relative abundance of birds in each region at a single point in time (i.e., a baseline year), inferred from an independent dataset such as BAM, ebird, or BBS:
+
+
+```{r, include = TRUE, message = FALSE}
+
+print(N0.plot)
+
+```
+
+
+```{r}
+N.region.station.array = array(NA, dim = c(nregion,nstation,T))
+for (s in 1:nstation){
+  for (t in isotope_years){
+    for (r in 1:nregion){
+      N.region.station.array[r,s,t] = N.region.station[which(N.region.station$r == r & N.region.station$station == s & N.region.station$t == t),]$N.captured
+    }
+  }
+}
+
+N.station.array = array(NA, dim = c(nstation,T))
+for (s in 1:nstation){
+  for (t in 1:T){
+      N.station.array[s,t] = N.station[which(N.station$t == t & N.station$station == s),]$N.captured.total
+  }
+}
+
+jags.data = list(T = T,
+                 nregion = nregion,
+                 nstation = nstation,
+                 logN0 = subset(N.df, t == 1)$logN0,
+                 N.region.station = N.region.station.array,
+                 N.station.total = N.station.array
+
+)
+
+colnames(jags.data$N.station.total) = paste0("t",1:T)
+rownames(jags.data$N.station.total) = paste0("s",1:nstation)
+
+dimnames(jags.data$N.region.station)[[1]] = paste0("r",1:nregion)
+dimnames(jags.data$N.region.station)[[2]] = paste0("s",1:nstation)
+dimnames(jags.data$N.region.station)[[3]] = paste0("t",1:T)
+
+jags.data$N.station.sampled = jags.data$N.station.total
+
+```
+
+## Model:
+
+#### Process model
+
+##### Part 1: Population growth process:
+
+Population growth in each region $r$ is treated as a time-varying process.  This example assumes the BBS-style process model:
+
+$$log(N_{r,t}) = log(N_{r,t_0})+ \beta_r(t-t_0) + \epsilon_{r,t}$$
+
+The standard deviation of year effects is treated as $\epsilon_{r,t} \sim N(0,\sigma_r)$.
+
+##### Part 2: Migration process model
+Migration monitoring stations are indexed by $s$. The parameter $\rho_{r,s}$ describes the expected proportion of birds breeding in region $r$ that are captured at station $s$ in a given year.
+
+Region-specific contributions to total counts at station $s$ in year $t$ are:
+
+$$\eta_{r,s,t} = N_{r,t} \times \rho_{r,s}$$
+
+The total number of birds captured at a migration station is therefore:
+
+$$C_{s,t} = \sum_r \eta_{r,s,t}$$
+
+#### Observation models
+
+##### Part 1: Composition of birds at migration station
+
+A sample of $n$ birds from station $s$ in year $t$ is used to determine the breeding origins of migrants. Each bird is assigned to a discrete region, though uncertainty could be incorporated into this assignment. The composition of birds in the sample is described by a multinomial distribution, where the proportion of birds at the station that originated from each region is described by a vector of probabilities $\alpha_{s,t}$ of length $R$.  Probabilities for each region are calculated as: $\eta_{r,s,t}/C_{s,t}$.
+
+##### Part 2: Estimate of station totals
+
+The true station totals each year, $C_{s,t}$, are not directly observable, owing to missing data and observation error (e.g., variation in effort). Station totals must therefore be estimated based on daily counts.  Crewe et al. (2016) provide a framework for doing so.
+
+In this simulation, I assume station totals are estimated with a relative standard error of 5%.
+
+#### Model fitting:
+The model is fit in JAGS.
+
+
+```{r, eval = FALSE, echo = TRUE, include = TRUE, message = FALSE}
+
+sink("cmmn3.jags")
+cat("
+
+    model {
+
+    # Trends in each region [r]
+    mean.trend ~ dnorm(0,0.1)
+    sd.trend.spatial ~ dunif(0,1)
+    tau.trend.spatial <- pow(sd.trend.spatial, -2)
+
+    for (r in 1:nregion){
+      trend[r] ~ dnorm(mean.trend,tau.trend.spatial)
+      logN0.uncert[r] ~ dnorm(logN0[r], 10)
+    }
+
+    proc.sd ~ dunif(0,1)
+    proc.tau <- pow(proc.sd,-2)
+
+    # True (unobserved) population dynamics in each region
+    for (t in 1:T){
+      for (r in 1:nregion){
+        noise[r,t] ~ dnorm(0,proc.tau)
+        logN[r,t] <- logN0.uncert[r] + trend[r] * (t-1) + noise[r,t] # Exponential population model
+        N[r,t] <- exp(logN[r,t])
+      }
+    }
+
+    # Proportion of birds from region [r] that are captured by station [s] (constant through time)
+    for (r in 1:nregion){
+      for (s in 1:nstation){
+        rho[r,s] ~ dunif(0,1)
+      }
+    }
+
+    # Observed numbers of birds at station [s] originating from region [r] in year [t]
+
+      for (s in 1:nstation){
+        for (t in 1:T){
+          for (r in 1:nregion){
+
+            mu[r,s,t] <- N[r,t] * rho[r,s]  # Seasonal total arriving at station [s] from region [r]  
+
+          }
+
+          # Total seasonal count at station [s]
+          true.total[s,t] <- sum(mu[1:nregion,s,t]) 
+
+          # Multinomial to describe regional composition in this year, at this station
+          N.region.station[1:nregion,s,t] ~ dmulti(mu[,s,t], N.station.sampled[s,t])
+
+        }
+      }
+
+    # Observed totals at each station each year
+    for (s in 1:nstation){
+      for (t in 1:T){
+
+        obs.sd[s,t] <- true.total[s,t]*0.05  # Assume observed total is within 5% of true seasonal total
+        obs.tau[s,t] <- pow(obs.sd[s,t],-2)
+
+        # Observed seasonal total count
+        N.station.total[s,t] ~ dnorm(true.total[s,t],obs.tau[s,t])  
+
+      }
+    }
+
+    #Derived quantity: total birds across all regions
+    for (t in 1:T){
+      N.total[t] <- sum(N[,t])
+    }
+
+    }
+    ",fill = TRUE)
+sink()
+```
+
+```{r}
+#Create data for import into jags
+inits <- function() list(trend = trend$trend,
+                         rho.raw = t(migrant.mat))
+
+out <- jags(data=jags.data,
+            model.file="cmmn3.jags",
+            parameters.to.save=c("proc.sd","trend","rho","N.total", "N", "logN0.uncert"),
+            inits = inits,
+            n.chains=2,n.thin = 5,n.iter=75000,n.burnin= 50000)
+
+
+```
+
+## Results:
+
+#### Estimated national dynamics:
+
+```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 4}
+
+#Total continental population dynamics
+
+N.sum$q500 = apply(out$sims.list$N.total,2, function(x) quantile(x,0.5))
+N.sum$q025 = apply(out$sims.list$N.total,2, function(x) quantile(x,0.025))
+N.sum$q975 = apply(out$sims.list$N.total,2, function(x) quantile(x,0.975))
+
+
+
+N.sum.plot = ggplot(data = N.sum)+
+  geom_ribbon(aes(x = t, ymin = log(q025), ymax = log(q975), fill = "95% CRI"), alpha = 0.2)+
+  geom_line(aes(x = t, y = log(N), col = "Truth"), linetype = 2)+
+  geom_line(aes(x = t, y = log(q500), col = "Estimate"))+
+
+  scale_color_manual(values=c("dodgerblue", "black"), name = "")+
+  scale_fill_manual(values=c("dodgerblue","black"), name = "")+
+  ylab("log(Total continental abundance)")+
+  xlab("Year")+
+  #ggtitle("National trend")+
+  theme_bw()
+
+print(N.sum.plot)
+  
+```
+
+The estimate of national trend (blue), relative to true national trend (black) is:
+```{r, include = TRUE, message = FALSE, fig.width = 5, fig.height = 3}
+#Estimate of national trend
+trend.est = apply(log(out$sims.list$N.total),1, function(x) mean(diff(x)))
+hist(trend.est, col = "lightblue", border = "transparent", main = "Trend estimate", ylab = "freq", xlab = "Trend",
+     breaks = seq(-0.15, 0.15, length.out = 200))
+abline(v = quantile(trend.est,0.5), lty = 1, lwd = 2, col = "dodgerblue")
+abline(v = quantile(trend.est,c(0.025,0.975)), lty = 1, lwd = 1, col = "dodgerblue")
+
+#Actual trend
+abline(v = mean(diff(log(N.sum$N))), lty = 2, lwd = 2)
+```
+
+The model therefore reliably estimates the true trend.
+
+#### Estimate of regional trends:
+
+```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 4}
+
+#Estimates of regional trends
+trend$q500 = apply(out$sims.list$trend,2,function(x) quantile(x, 0.500))
+trend$q025 = apply(out$sims.list$trend,2,function(x) quantile(x, 0.025))
+trend$q975 = apply(out$sims.list$trend,2,function(x) quantile(x, 0.975))
+trend$region_fac = factor(1:nrow(trend))
+
+trend.plot = ggplot(data = trend)+
+  geom_point(aes(x = region_fac, y = q500, col = "Estimate",shape="Estimate", size = "Estimate"))+
+  geom_errorbar(aes(x = region_fac, ymin = q025, ymax = q975), width = 0, col = "dodgerblue")+
+  geom_point(aes(x = region_fac, y = trend, col = "Truth", shape = "Truth", size = "Truth"))+
+  
+  scale_shape_manual(values = c(19,4), name = "")+
+  scale_color_manual(values = c("dodgerblue","black"), name = "")+
+  scale_size_manual(values=c(2,6), name = "")+
+  theme_bw()+
+  geom_hline(yintercept = 0, linetype = 2)+
+  xlab("Region")+
+  ylab("Trend")
+  #ggtitle("Regional trends")
+
+print(trend.plot)
+```
+
+Regional trends are also estimated reliably.  Regions with low contributions to migration stations have less precise estimates.  
+
+#### Estimate of regional dynamics:
+
+```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 5}
+
+N.df$q500 = N.df$q025 = N.df$q975 = NA
+
+for (i in 1:nrow(N.df)){
+  N.df$q500[i] = quantile(out$sims.list$N[,N.df$region[i], N.df$t[i]],0.5)
+  N.df$q025[i] = quantile(out$sims.list$N[,N.df$region[i], N.df$t[i]],0.025)
+  N.df$q975[i] = quantile(out$sims.list$N[,N.df$region[i], N.df$t[i]],0.975)
+  
+}
+N.df$region_fac = factor(N.df$region)
+
+region.plot = ggplot(data = N.df)+
+  geom_ribbon(aes(x = t, ymin = q025, ymax = q975, fill = region_fac), alpha = 0.25)+
+  geom_line(aes(x = t, y = q500, col = region_fac))+
+  geom_line(aes(x = t, y = N), col = "black", linetype = 2)+
+  
+  theme_bw()+
+  
+  scale_fill_manual(values=col.pal, name = "Region")+
+  scale_color_manual(values=col.pal, name = "Region")+
+  
+  
+  xlab("Year")+
+  ylab("Abundance")+
+  #ggtitle("Regional dynamics")+
+  facet_grid(region_fac~., scales = "free")
+
+print(region.plot)
+```
+
+
+
+## Summary
+
+
+This document illustrates that regional and national trends can be estimated with CMMN data, provided we have estimated totals each season, catchment composition in at least one year, and estimates of total birds (or relative abundance) in each region.
+
+
+## Next steps
+
+
+1) Integrate the more detailed "daily catch" model from Crewe et al. (2016)
+      - I have a separate simulation that accomplishes this
+      
+2) Evaluate whether the model can cope with temporal variation in migratory pathways.
+      - possibly requires multiple years of stable isotopes
+
+
