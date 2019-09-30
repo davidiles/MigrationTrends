@@ -1,3 +1,4 @@
 /test_scripts_ignore/
 /data/
 /from_collaborators/
+*.Rhistory
