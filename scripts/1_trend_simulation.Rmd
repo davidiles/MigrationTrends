@@ -19,7 +19,9 @@ library(reshape2)
 library(viridis)
 library(jagsUI)
 
-setwd("~/1_Work/Research/In Progress/MigrationTrends/scripts")
+#setwd("~/Projects/MigrationTrends/scripts")
+#setwd(getSrcDirectory()[1])
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 rm(list=ls())
 
@@ -251,21 +253,17 @@ suppressWarnings(print(capture.plot))
 
 Trends differ among stations, resulting from differences in their catchment. The composition of birds at each station also changes through time.
 
-
 ## Data required to estimate national trends using CMMN:
 
 A model to estimate national trends can be fit using 3 key pieces of information:
 
 1) Total numbers of birds captured in each year of study at each station.  In practice, these "seasonal totals" are not known and must be estimated using a state-space model such as in Crewe et al. (2016).  In this simulated example, I assume we can estimate seasonal totals with a SE of 5%.   
 
-
 ```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 5}
 
 suppressWarnings(print(N.station.plot))
 
 ```
-
-
 
 ```{r}
 # Years where isotope data were collected
@@ -384,22 +382,28 @@ The model is fit in JAGS.
 
 ```{r, eval = FALSE, echo = TRUE, include = TRUE, message = FALSE}
 
-sink("cmmn3.jags")
+sink("cmmn1.jags")
 cat("
 
     model {
 
-    # Trends in each region [r]
+    #---------------------------------------------
+    # Model for population dynamics in each region
+    #---------------------------------------------
+
+    # Trends and initial abundance in each region [r]
     mean.trend ~ dnorm(0,1) # Grand mean of temporal trend
     sd.trend.spatial ~ dunif(0,1) # Spatial variance in trends
     tau.trend.spatial <- pow(sd.trend.spatial, -2)
 
-    logN0.sd <- 0.1
-    logN0.tau <- pow(logN0.sd,-2)
+    #logN0.sd <- 0.1
+    #logN0.tau <- pow(logN0.sd,-2)
     
     for (r in 1:nregion){
       trend[r] ~ dnorm(mean.trend,tau.trend.spatial) # Trend in each region is estimated as a random effect
-      logN0.uncert[r] <- logN0[r] #~ dnorm(logN0[r],logN0.tau)    # Uncertainty in initial abundance
+
+      #logN0.uncert[r] ~ dnorm(logN0[r],logN0.tau)    # Include uncertainty in initial abundance
+      logN0.uncert[r] <- logN0[r] #~ dnorm(logN0[r],logN0.tau)    # No uncertainty in initial abundance
     }
 
     # Temporal variance in trend
@@ -416,6 +420,10 @@ cat("
       }
     }
 
+    #---------------------------------------------
+    # Observed numbers of birds at station [s] originating from region [r] in year [t]
+    #---------------------------------------------
+
     # Proportion of birds from region [r] that are captured by station [s] (constant through time)
     for (r in 1:nregion){
       for (s in 1:nstation){
@@ -423,26 +431,29 @@ cat("
       }
     }
 
-    # Observed numbers of birds at station [s] originating from region [r] in year [t]
-      for (s in 1:nstation){
-        for (t in 1:T){
-          for (r in 1:nregion){
+    for (s in 1:nstation){
+      for (t in 1:T){
+        for (r in 1:nregion){
 
-            mu[r,s,t] <- N[r,t] * rho[r,s]  # Seasonal total arriving at station [s] from region [r]  
-
-          }
-
-          # Total seasonal count at station [s]
-          true.total[s,t] <- sum(mu[1:nregion,s,t]) 
-
-          # Multinomial to describe regional composition in this year, at this station
-          N.region.station[1:nregion,s,t] ~ dmulti(mu[,s,t], N.station.sampled[s,t])
+          mu[r,s,t] <- N[r,t] * rho[r,s]  # Seasonal total arriving at station [s] from region [r]  
 
         }
-      }
 
+        # Total seasonal count at station [s]
+        true.total[s,t] <- sum(mu[1:nregion,s,t]) 
+
+        # Multinomial to describe regional composition in this year, at this station
+        N.region.station[1:nregion,s,t] ~ dmulti(mu[,s,t], N.station.sampled[s,t])
+
+      }
+    }
+
+    #---------------------------------------------
     # Observed totals at each station each year
-    obs.error.CV <- 0.01
+    #---------------------------------------------
+
+    obs.error.CV <- 0.01   
+
     for (s in 1:nstation){
       for (t in 1:T){
 
@@ -455,7 +466,11 @@ cat("
       }
     }
 
-    #Derived quantity: total birds across all regions
+    #---------------------------------------------
+    # Derived quantities
+    #---------------------------------------------
+
+    # Total birds across all regions (used to determine national trend)
     for (t in 1:T){
       N.total[t] <- sum(N[,t])
     }
@@ -471,13 +486,13 @@ inits <- function() list(trend = trend$trend,
                          rho = t(migrant.mat))
 
 out <- jags(data = jags.data,
-            model.file = "cmmn3.jags",
+            model.file = "cmmn1.jags",
             parameters.to.save = c("proc.sd","trend","rho","N.total", "N", "logN0.uncert"),
             inits = inits,
             n.chains = 2,
-            n.thin = 10, 
-            n.iter = 100000,
-            n.burnin = 50000)
+            n.thin = 50, 
+            n.iter = 250000,
+            n.burnin = 100000)
 
 
 ```
@@ -516,7 +531,7 @@ The estimate of national trend (blue), relative to true national trend (black) i
 trend.est <- apply(log(out$sims.list$N.total),1, function(x) mean(diff(x)))
 
 hist(trend.est, col = "lightblue", border = "transparent", main = "Trend estimate", ylab = "freq", xlab = "Trend",
-     breaks = seq(-0.15, 0.15, length.out = 200))
+     breaks = seq(-0.10, 0.10, length.out = 200))
 
 abline(v = quantile(trend.est,0.5), lty = 1, lwd = 2, col = "dodgerblue")
 
@@ -566,7 +581,6 @@ for (i in 1:nrow(N.df)){
   N.df$q500[i] <- quantile(out$sims.list$N[,N.df$region[i], N.df$t[i]],0.5)
   N.df$q025[i] <- quantile(out$sims.list$N[,N.df$region[i], N.df$t[i]],0.025)
   N.df$q975[i] <- quantile(out$sims.list$N[,N.df$region[i], N.df$t[i]],0.975)
-  
 }
 N.df$region_fac <- factor(N.df$region)
 
@@ -593,8 +607,6 @@ suppressWarnings(print(region.plot))
 
 
 This document illustrates that regional and national trends can be estimated with CMMN data, provided we have estimated totals each season, catchment composition in at least one year, and estimates of total birds (or relative abundance) in each region.
-
-Estimates of national abundance can be biased
 
 
 ## Next steps
