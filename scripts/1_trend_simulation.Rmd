@@ -22,7 +22,7 @@ library(ggplot2)
 library(reshape2)
 library(jagsUI)
 
-setwd("~/1_Work/ECCC/CMMN/scripts")
+setwd("~/Projects/MigrationTrends/scripts")
 
 rm(list=ls())
 
@@ -408,13 +408,15 @@ cat("
     model {
 
     # Trends in each region [r]
-    mean.trend ~ dnorm(0,0.1)
+    mean.trend ~ dnorm(0,1)
     sd.trend.spatial ~ dunif(0,1)
     tau.trend.spatial <- pow(sd.trend.spatial, -2)
 
+    logN0.sd ~ dnorm(0,10)
     for (r in 1:nregion){
       trend[r] ~ dnorm(mean.trend,tau.trend.spatial)
-      logN0.uncert[r] ~ dnorm(logN0[r], 10)
+      #logN0.uncert[r] ~ dnorm(logN0[r], 5)
+      logN0.uncert[r] <- logN0[r] + logN0.sd
     }
 
     proc.sd ~ dunif(0,1)
@@ -432,7 +434,7 @@ cat("
     # Proportion of birds from region [r] that are captured by station [s] (constant through time)
     for (r in 1:nregion){
       for (s in 1:nstation){
-        rho[r,s] ~ dunif(0,1)
+        rho[r,s] ~ dnorm(0,1) 
       }
     }
 
@@ -481,13 +483,13 @@ sink()
 ```{r}
 #Create data for import into jags
 inits <- function() list(trend = trend$trend,
-                         rho.raw = t(migrant.mat))
+                         rho = t(migrant.mat))
 
 out <- jags(data=jags.data,
             model.file="cmmn3.jags",
             parameters.to.save=c("proc.sd","trend","rho","N.total", "N", "logN0.uncert"),
             inits = inits,
-            n.chains=2,n.thin = 5,n.iter=75000,n.burnin= 50000)
+            n.chains=2,n.thin = 25,n.iter=500000,n.burnin= 100000)
 
 
 ```
