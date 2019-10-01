@@ -33,7 +33,7 @@ setwd("~/Projects/MigrationTrends/scripts")
 rm(list=ls())
 
 seed <- runif(1,0,1000)
-set.seed(450)
+set.seed(660)
 
 ```
 
@@ -93,7 +93,7 @@ Note that we are unable to directly observe the regional (or national) dynamics.
  
 ```{r}
 # Define a series of monitoring stations
-nstation <- 4
+nstation <- 5
 
 # For each station, define a catchment area
 migrant.mat <- matrix(NA, nrow = nregion, ncol = nstation)
@@ -105,7 +105,7 @@ migrant.mat <- c()
 for (r in 1:nregion){
   
   rho <- rep(0,nstation) # Empty vector to store probabilities
-  stations.used <- sample(1:nstation,round(runif(1,1,4))) # Which stations have non-zero probabilities?
+  stations.used <- sample(1:nstation,round(runif(1,2,4))) # Which stations have non-zero probabilities?
   rho[stations.used] <- runif(length(stations.used),min.rho,max.rho) # Insert random probabilities into those stations
   migrant.mat <- rbind(migrant.mat, rho)
   
@@ -266,7 +266,7 @@ migration.phenology.df <- expand.grid(station = 1:nstation,
                                       peak.migration = peak.migration,
                                       sd.migration = sd.migration)
 
-daily.obs.error <- 0.8
+daily.obs.error <- 0.3
 
 N.daily.df <- expand.grid(year = 1:nyear, station = 1:nstation, day = 1:nday) %>%
   full_join(x = . , y = N.station) %>%
@@ -528,10 +528,80 @@ out3 <- jags(data = jags.data,
                                     ),
              inits = inits,
              n.chains = 2,
-             n.thin = 40, 
-             n.iter = 50000,
+             n.thin = 20, 
+             n.iter = 20000,
              n.burnin = 10000)
 
 max(unlist(out3$Rhat),na.rm=TRUE)
 save(out3, file = "~/Projects/MigrationTrends/scripts/jags_output/out3.RData")
+```
+
+```{r, include = TRUE, message = FALSE}
+N.sum <- aggregate(N~year, data = N.df, FUN = sum)
+N.sum$logN <- log(N.sum$N)
+
+#Total continental population dynamics
+
+N.sum$q500 <- apply(out3$sims.list$N.total,2, function(x) quantile(x,0.5))
+N.sum$q025 <- apply(out3$sims.list$N.total,2, function(x) quantile(x,0.025))
+N.sum$q975 <- apply(out3$sims.list$N.total,2, function(x) quantile(x,0.975))
+
+N.sum.plot <- ggplot(data = N.sum)+
+  geom_ribbon(aes(x = year, ymin = log(q025), ymax = log(q975), fill = "95% CRI"), alpha = 0.2)+
+  geom_line(aes(x = year, y = log(N), col = "Truth"), linetype = 2)+
+  geom_line(aes(x = year, y = log(q500), col = "Estimate"))+
+  
+  scale_color_manual(values=c("dodgerblue", "black"), name = "")+
+  scale_fill_manual(values=c("dodgerblue","black"), name = "")+
+  ylab("log(Total continental abundance)")+
+  xlab("Year")+
+  theme_bw()
+
+suppressWarnings(print(N.sum.plot))
+
+#Estimate of national trend
+trend.est <- apply(log(out3$sims.list$N.total),1, function(x) mean(diff(x)))
+
+hist(trend.est, col = "lightblue", border = "transparent", main = "Trend estimate", ylab = "freq", xlab = "Trend",
+     breaks = seq(-0.2, 0.2, length.out = 200))
+
+abline(v = quantile(trend.est,0.5), lty = 1, lwd = 2, col = "dodgerblue")
+
+abline(v = quantile(trend.est,c(0.025,0.975)), lty = 1, lwd = 1, col = "dodgerblue")
+
+#Actual trend
+abline(v = mean(diff(log(N.sum$N))), lty = 2, lwd = 2)
+```
+
+#### Estimate of regional dynamics:
+
+```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 5}
+
+N.df$q500 <- N.df$q025 <- N.df$q975 <- NA
+
+for (i in 1:nrow(N.df)){
+  N.df$q500[i] <- quantile(out3$sims.list$N[,N.df$region[i], N.df$year[i]],0.5)
+  N.df$q025[i] <- quantile(out3$sims.list$N[,N.df$region[i], N.df$year[i]],0.025)
+  N.df$q975[i] <- quantile(out3$sims.list$N[,N.df$region[i], N.df$year[i]],0.975)
+}
+N.df$region_fac <- factor(N.df$region)
+
+region.plot <- ggplot(data = N.df)+
+  geom_ribbon(aes(x = year, ymin = q025, ymax = q975, fill = region_fac), alpha = 0.25)+
+  geom_line(aes(x = year, y = q500, col = region_fac))+
+  geom_line(aes(x = year, y = N), col = "black", linetype = 2)+
+  
+  theme_bw()+
+  
+  scale_fill_manual(values=col.pal, name = "Region")+
+  scale_color_manual(values=col.pal, name = "Region")+
+  
+  
+  xlab("Year")+
+  ylab("Abundance")+
+  #ggtitle("Regional dynamics")+
+  facet_grid(region_fac~., scales = "free")
+
+suppressWarnings(print(region.plot))
+
 ```
