@@ -528,10 +528,10 @@ out3 <- jags(data = jags.data,
                                     ),
              inits = inits,
              n.chains = 2,
-             n.thin = 50, 
+             n.thin = 40, 
              n.iter = 50000,
              n.burnin = 10000)
 
 max(unlist(out3$Rhat),na.rm=TRUE)
-save()
+save(out3, file = "~/Projects/MigrationTrends/scripts/jags_output/out3.RData")
 ```
