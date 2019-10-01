@@ -4,11 +4,14 @@ author: "Dave Iles"
 date: "September 24, 2019"
 fontsize: 10pt
 output:
-  word_document: default
-  pdf_document: default
-  html_document: default
-
+  rmarkdown::pdf_document:
+    fig_width: 4
+    fig_height: 3
+    fig_caption: yes        
+    includes:  
+      in_header: preamble-latex.tex
 ---
+
 
 ```{r setup, include=FALSE}
 # Setup options
@@ -19,9 +22,9 @@ library(reshape2)
 library(viridis)
 library(jagsUI)
 
-#setwd("~/Projects/MigrationTrends/scripts")
+setwd("~/Projects/MigrationTrends/scripts")
 #setwd(getSrcDirectory()[1])
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+#setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 rm(list=ls())
 
@@ -30,9 +33,7 @@ set.seed(450)
 
 ```
 
-# Part 1: Model overview
-
-## Generation of data
+# Model overview
 
 ```{r}
 # Define populations/regions
@@ -43,10 +44,11 @@ col.pal <- RColorBrewer::brewer.pal(nregion,"Paired") # Define nice color palett
 ```
 
 
-Assume there are `r nregion` regions (e.g., BCRs), each with a different mean trend:
+Assume there are `r nregion` regions (e.g., BCRs), each with a different mean trend (see Figure \ref{fig:fig1}):
 
 
-```{r, include = TRUE, message = FALSE}
+```{r fig1, include = TRUE, message = FALSE, fig.cap="\\label{fig:fig1}Trends in each region."}
+
 trend.plot <- ggplot(data = trend) +
   geom_point(aes(x = factor(region), y = trend, col = factor(region)), shape = 19, size = 5)+
   geom_hline(yintercept = 0, linetype = 2)+
@@ -68,7 +70,7 @@ logN0 <- data.frame(region = 1:nregion, logN0 = rnorm(nregion,log(50000),0.5))
 Assume each region has a different initial abundance:
 
 
-```{r, include = TRUE, message = FALSE}
+```{r fig2, include = TRUE, message = FALSE, fig.cap="\\label{fig:fig2}Initial abundance in each region."}
 N0.plot <- ggplot(data = logN0) +
   geom_bar(aes(x = factor(region), y = exp(logN0), fill = factor(region)), stat = "identity")+
   xlab("Region")+
@@ -94,10 +96,10 @@ N.df$N <- round(exp(N.df$logN)) # convert to integers for later use in binomial
 ```
 
 
-Assume there is additional temporal variation in mean trends at each site (i.e., random year effects).  The resulting dynamics in each region over `r T` years are:
+Assume there is additional temporal variation in trends at each site (i.e., random year effects).  The resulting dynamics in each region over `r T` years are:
 
 
-```{r, include = TRUE, message = FALSE, fig.width = 6}
+```{r fig3, include = TRUE, message = FALSE, fig.cap="\\label{fig:fig3}Population dynamics in each region."}
 N.plot <- ggplot(data = N.df) +
   geom_line(aes(x = t, y = N, col = factor(region)))+
   scale_color_manual(values=col.pal, name = "Region")+
@@ -108,8 +110,7 @@ suppressWarnings(print(N.plot))
 ```
 
 
-The sum of all regional abundances at each time step is the national abundance:
-
+The sum of all regional abundances at each time step is the national abundance.  This is the 
 
 ```{r, include = TRUE, message = FALSE}
 # Calculate total N across the simulation
@@ -124,8 +125,6 @@ N.sum.plot <- ggplot(data = N.sum) +
 
 suppressWarnings(print(N.sum.plot))
 ```
-
-
 
 ```{r}
 # Define a series of monitoring stations
@@ -193,7 +192,7 @@ migrant.plot2 <- ggplot(data = migrant.df2) +
 
 The following figure illustrates the proportion of birds originating from each of the `r nregion` regions that are captured at each of the `r nstation` stations:
 
-```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 4}
+```{r fig4, include = TRUE, message = FALSE, fig.width = 6, fig.height = 4, fig.cap="\\label{fig:fig4}Migration through each station."}
 suppressWarnings(print(migrant.plot2))
 ```
 
@@ -232,7 +231,7 @@ N.region.station <- N.region.station[order(N.region.station$station,N.region.sta
 The total number of birds captured at each station in each year, originating from each region, is plotted below:
 
 
-```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 5}
+```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 5, fig.cap="\\label{fig:figs}Regional trends"}
 #Total number of birds caught at each station over time
 N.station.plot <- ggplot(data = N.station) +
   geom_bar(aes(x = t, y = N.captured.total), fill = "gray75", stat = "identity", alpha = 0.7)+
@@ -906,7 +905,7 @@ dimnames(jags.data$daily.count)[[3]] <- paste0("t",1:T)
 jags.data$N.station.sampled <- N.station.array * 0 + N.sampled
 ```
 
-```{r}
+```{r, eval = FALSE}
 #Create data for import into jags
 inits <- function() list(trend = trend$trend,
                          rho = t(migrant.mat))
@@ -933,7 +932,7 @@ max(unlist(out3$Rhat),na.rm=TRUE)
 
 ```
 
-```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 4}
+```{r, include = TRUE, message = FALSE, fig.width = 6, fig.height = 4, eval = FALSE}
 
 #Total continental population dynamics
 
@@ -958,7 +957,7 @@ suppressWarnings(print(N.sum.plot))
 ```
 
 The estimate of national trend (blue), relative to true national trend (black) is:
-```{r, include = TRUE, message = FALSE, fig.width = 5, fig.height = 3}
+```{r, include = TRUE, message = FALSE, fig.width = 5, fig.height = 3, eval = FALSE}
 #Estimate of national trend
 trend.est <- apply(log(out3$sims.list$N.total),1, function(x) mean(diff(x)))
 
