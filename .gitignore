@@ -1,6 +1,5 @@
 /test_scripts_ignore/
 /data/
 /from_collaborators/
-/scripts/jags_output/
 *.Rhistory
 *.pdf
