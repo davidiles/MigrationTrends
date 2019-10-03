@@ -33,7 +33,7 @@ setwd("~/Projects/MigrationTrends/scripts")
 rm(list=ls())
 
 seed <- runif(1,0,1000)
-set.seed(660)
+set.seed(111)
 
 ```
 
@@ -42,7 +42,7 @@ set.seed(660)
 
 ```{r}
 # Define populations/regions
-nregion <- 3
+nregion <- 4
 trend <- data.frame(region = 1:nregion,trend = rnorm(nregion,-0.06,0.1)) # Trend in each region
 logN0 <- data.frame(region = 1:nregion, logN0 = rnorm(nregion,log(50000),0.5)) # Initial abundance
 
@@ -95,17 +95,17 @@ Note that we are unable to directly observe the regional or national dynamics.  
 # Define a series of monitoring stations
 nstation <- 5
 
-# For each station, define a catchment area
-migrant.mat <- matrix(NA, nrow = nregion, ncol = nstation)
-
 # nregion x nstation matrix.  each cell describes the proportion of birds from region [r] that arrive at station [s]
 min.rho = 0.0001
 max.rho = 0.003
 migrant.mat <- c()
 for (r in 1:nregion){
-  
+  print(r)
   rho <- rep(0,nstation) # Empty vector to store probabilities
-  stations.used <- sample(1:nstation,round(runif(1,2,4))) # Which stations have non-zero probabilities?
+  #stations.used <- sample(1:nstation,round(runif(1,1,3))) # Which stations have non-zero probabilities?
+  stations.used <- c(r,sample((r-3):(r+3),round(runif(1,0,5)))) # Which stations have non-zero probabilities?
+  stations.used <- stations.used[which(stations.used > 0 & stations.used <= nstation)]
+  
   rho[stations.used] <- runif(length(stations.used),min.rho,max.rho) # Insert random probabilities into those stations
   migrant.mat <- rbind(migrant.mat, rho)
   
@@ -518,7 +518,7 @@ dimnames(jags.data$daily.count)[[2]] <- paste0("station",1:nstation)
 dimnames(jags.data$daily.count)[[3]] <- paste0("year",1:nyear)
 ```
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 #Create data for import into jags
 inits <- function() list(trend = trend$trend,
                         rho = t(migrant.mat))
@@ -536,10 +536,10 @@ out3 <- jags(data = jags.data,
                                     "N"
                                     ),
              inits = inits,
-             n.chains = 3,
+             n.chains = 2,
              n.thin = 25,
-             n.iter = 50000,
-             n.burnin = 25000)
+             n.iter = 100000,
+             n.burnin = 50000)
 
 max(unlist(out3$Rhat),na.rm=TRUE)
 save(out3, file = "~/Projects/MigrationTrends/scripts/jags_output/out3.RData")
