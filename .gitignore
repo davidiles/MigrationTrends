@@ -3,3 +3,6 @@
 /from_collaborators/
 *.Rhistory
 *.pdf
+/presentations/
+/scripts/old_scripts
+/scripts/jags_output
