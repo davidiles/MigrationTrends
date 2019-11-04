@@ -33,23 +33,22 @@ setwd("~/Projects/MigrationTrends/scripts")
 rm(list=ls())
 
 seed <- runif(1,0,1000)
-set.seed(111)
+set.seed(279)
 
 ```
 
 ### Overview of model logic
 
-
 ```{r}
 # Define populations/regions
-nregion <- 4
+nregion <- 3
 trend <- data.frame(region = 1:nregion,trend = rnorm(nregion,-0.06,0.1)) # Trend in each region
 logN0 <- data.frame(region = 1:nregion, logN0 = rnorm(nregion,log(50000),0.5)) # Initial abundance
 
 col.pal <- RColorBrewer::brewer.pal(nregion,"Paired") # Define nice color palette
 
 # Project population dynamics in each region
-nyear <- 10 # Length of simulation
+nyear <- 20 # Length of simulation
 proc.sd <- 0.1 # Temporal sd of log-scale abundance
 
 N.df <- expand.grid(year = 1:nyear,region = 1:nregion) %>%
@@ -97,13 +96,13 @@ nstation <- 5
 
 # nregion x nstation matrix.  each cell describes the proportion of birds from region [r] that arrive at station [s]
 min.rho = 0.0001
-max.rho = 0.003
+max.rho = 0.001
 migrant.mat <- c()
 for (r in 1:nregion){
   print(r)
   rho <- rep(0,nstation) # Empty vector to store probabilities
   #stations.used <- sample(1:nstation,round(runif(1,1,3))) # Which stations have non-zero probabilities?
-  stations.used <- c(r,sample((r-3):(r+3),round(runif(1,0,5)))) # Which stations have non-zero probabilities?
+  stations.used <- c(r,sample((r-3):(r+3),round(runif(1,1,5)))) # Which stations have non-zero probabilities?
   stations.used <- stations.used[which(stations.used > 0 & stations.used <= nstation)]
   
   rho[stations.used] <- runif(length(stations.used),min.rho,max.rho) # Insert random probabilities into those stations
@@ -161,8 +160,6 @@ Figure \ref{fig:fig3} illustrates the proportion of birds originating from each 
 suppressWarnings(print(migrant.plot2))
 ```
 
-In this example, station 1 captures birds exclusively from region 2, while station 5 captures birds exclusively from region 1. Station 2 captures birds from regions 1 and 3...etc.  Note that no stations monitor birds exclusively from region 3.  The only trend information for region 3 will come from stations that simultaneously capture birds from other regions; thus, inference for this region will be somewhat less direct than for regions 1 and 2.
-
 ```{r}
 N.region.station <- expand.grid(year = 1:nyear, station = 1:nstation, region = 1:nregion) %>%
   full_join(x = . , y = N.df) %>%
@@ -212,7 +209,7 @@ suppressWarnings(print(capture.plot))
 
 ```{r}
 isotope.years <- c(5) # Years where isotope data were collected
-N.sampled <- 25 # Number of birds sampled at each station
+N.sampled <- 15 # Number of birds sampled at each station
 
 N.isotope.array <- array(NA, dim = c(nregion,nstation,nyear))
 for (s in 1:nstation){
@@ -267,7 +264,7 @@ migration.phenology.df <- expand.grid(station = 1:nstation,
                                       peak.migration = peak.migration,
                                       sd.migration = sd.migration)
 
-daily.obs.error <- 0.5
+daily.obs.error <- 0.9
 
 N.daily.df <- expand.grid(year = 1:nyear, station = 1:nstation, day = 1:nday) %>%
   full_join(x = . , y = N.station) %>%
@@ -287,7 +284,7 @@ The expected counts on each day for the first 5 years at station 1 are shown in 
 
 ```{r fig6, include = TRUE, message = FALSE, fig.width = 7, fig.height = 4, fig.cap="\\label{fig:fig6}Expected daily counts each year at station 1."}
 
-example.N.daily.df = subset(N.daily.df, station == 1 & year<=5)
+example.N.daily.df = subset(N.daily.df, station == 2 & year >=1)
 example.N.daily.df$year = paste0("year ",example.N.daily.df$year)
 daily.catch.plot.expected <- ggplot(data = example.N.daily.df) +
   geom_line(aes(x = day, y = lambda.mu), col = "gray35")+
@@ -382,7 +379,7 @@ cat("
       }
       
       # Temporal variance in trend
-      proc.sd ~ dunif(0,1)
+      proc.sd ~ dunif(0,2)
       proc.tau <- pow(proc.sd,-2)
       
       # True (unobserved) population dynamics in each region
@@ -404,7 +401,7 @@ cat("
       # captured by station [s] (constant through time)
       for (r in 1:nregion){
         for (s in 1:nstation){
-          rho[r,s] ~ dnorm(0,1) 
+          rho[r,s] ~ dunif(0,1) 
         }
       }
       
@@ -538,16 +535,16 @@ out3 <- jags(data = jags.data,
              inits = inits,
              n.chains = 2,
              n.thin = 25,
-             n.iter = 100000,
-             n.burnin = 50000)
+             n.iter = 200000,
+             n.burnin = 100000)
 
 max(unlist(out3$Rhat),na.rm=TRUE)
-save(out3, file = "~/Projects/MigrationTrends/scripts/jags_output/out3.RData")
+#save(out3, file = "~/Projects/MigrationTrends/scripts/jags_output/out3.RData")
 ```
 
 ```{r, eval = TRUE}
 # Import results of Bayesian analysis
-load(file = "~/Projects/MigrationTrends/scripts/jags_output/out3.RData")
+#load(file = "~/Projects/MigrationTrends/scripts/jags_output/out3.RData")
 ```
 
 \pagebreak
@@ -585,7 +582,7 @@ suppressWarnings(print(N.sum.plot))
 trend.est <- apply(log(out3$sims.list$N.total),1, function(x) mean(diff(x)))
 
 hist(trend.est, col = "lightblue", border = "transparent", main = "",freq=FALSE, xlab = "Trend",
-     breaks = seq(-0.2, 0.2, length.out = 200))
+     breaks = seq(-0.5, 0.5, length.out = 200))
 
 abline(v = quantile(trend.est,0.5), lty = 1, lwd = 2, col = "dodgerblue")
 

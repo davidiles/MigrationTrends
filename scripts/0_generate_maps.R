@@ -350,14 +350,32 @@ pdf("../figures/fig4_yearly_daily_counts.pdf", width = length(unique(dat$YearCol
 print(yearly.daily.counts.plot)
 dev.off()
 
-daily.means.plot = ggplot(data = daily.means)+
-  geom_line(aes(x = JulianDay, y = log(Focal.Species.Counted)), col = "blue")+
-  facet_grid(Site.Locality~., scales = "free")+
-  theme_bw()
+yearly.daily.counts.plot = ggplot(data = subset(dat, Site.Locality == "lpbo.4" & YearCollected %in% seq(2005,2016)))+
+  geom_line(aes(x = JulianDay, y = Focal.Species.Counted), col = "blue")+
+  facet_grid(.~YearCollected)+
+  ylab("Number Counted")+
+  xlab("Day")+
+  theme_bw()+
+  theme(axis.text = element_text(size = 5))
+print(yearly.daily.counts.plot)
 
-pdf("../figures/fig5_daily_means.pdf", width = 10, height = length(unique(dat$Locality))*2)
-print(daily.means.plot)
-dev.off()
+yearly.daily.counts.plot = ggplot(data = subset(dat, Site.Locality == "bpbo.1" & YearCollected %in% seq(2005,2016)))+
+  geom_line(aes(x = JulianDay, y = Focal.Species.Counted), col = "blue")+
+  facet_grid(.~YearCollected)+
+  ylab("Number Counted")+
+  xlab("Day")+
+  theme_bw()+
+  theme(axis.text = element_text(size = 5))
+print(yearly.daily.counts.plot)
+
+# daily.means.plot = ggplot(data = daily.means)+
+#   geom_line(aes(x = JulianDay, y = log(Focal.Species.Counted)), col = "blue")+
+#   facet_grid(Site.Locality~., scales = "free")+
+#   theme_bw()
+# 
+# pdf("../figures/fig5_daily_means.pdf", width = 10, height = length(unique(dat$Locality))*2)
+# print(daily.means.plot)
+# dev.off()
 
 #----------------------------------------------------
 # Format data for analysis
