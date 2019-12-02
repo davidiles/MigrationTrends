@@ -33,7 +33,7 @@ setwd("~/Projects/MigrationTrends/scripts")
 rm(list=ls())
 
 seed <- runif(1,0,1000)
-set.seed(279)
+set.seed(61)
 
 ```
 
@@ -41,9 +41,9 @@ set.seed(279)
 
 ```{r}
 # Define populations/regions
-nregion <- 3
-trend <- data.frame(region = 1:nregion,trend = rnorm(nregion,-0.06,0.1)) # Trend in each region
-logN0 <- data.frame(region = 1:nregion, logN0 = rnorm(nregion,log(50000),0.5)) # Initial abundance
+nregion <- 5
+trend <- data.frame(region = 1:nregion,trend = seq(-0.1,0.1,length.out = nregion)) #rnorm(nregion,-0.06,0.1)) # Trend in each region
+logN0 <- data.frame(region = 1:nregion, logN0 = log(seq(100000,20000,length.out = nregion)))# rnorm(nregion,log(50000),0.5)) # Initial abundance
 
 col.pal <- RColorBrewer::brewer.pal(nregion,"Paired") # Define nice color palette
 
@@ -96,13 +96,13 @@ nstation <- 5
 
 # nregion x nstation matrix.  each cell describes the proportion of birds from region [r] that arrive at station [s]
 min.rho = 0.0001
-max.rho = 0.001
+max.rho = 0.003
 migrant.mat <- c()
 for (r in 1:nregion){
   print(r)
   rho <- rep(0,nstation) # Empty vector to store probabilities
   #stations.used <- sample(1:nstation,round(runif(1,1,3))) # Which stations have non-zero probabilities?
-  stations.used <- c(r,sample((r-3):(r+3),round(runif(1,1,5)))) # Which stations have non-zero probabilities?
+  stations.used <- c(r,sample(1:nstation,2))#round(runif(1,2,3)))) # Which stations have non-zero probabilities?
   stations.used <- stations.used[which(stations.used > 0 & stations.used <= nstation)]
   
   rho[stations.used] <- runif(length(stations.used),min.rho,max.rho) # Insert random probabilities into those stations
@@ -198,7 +198,7 @@ N.region.station2$station = paste0("station ",N.region.station2$station)
 capture.plot <- ggplot(data = N.region.station2) +
   geom_bar(aes(x = year, y = N.captured, fill = factor(region)), stat = "identity", alpha = 0.7)+
   scale_fill_manual(values=col.pal, name = "Region of origin")+
-  facet_grid(station~., scales = "free")+
+  facet_grid(station~.)+
   ylab("Total birds counted per season")+
   xlab("Year")+
   #ggtitle("True composition of captures at each station")+
@@ -208,7 +208,7 @@ suppressWarnings(print(capture.plot))
 ```
 
 ```{r}
-isotope.years <- c(5) # Years where isotope data were collected
+isotope.years <- 10 #seq(1,nyear) # Years where isotope data were collected
 N.sampled <- 15 # Number of birds sampled at each station
 
 N.isotope.array <- array(NA, dim = c(nregion,nstation,nyear))
@@ -254,17 +254,17 @@ We also do not directly observe the expected seasonal totals each year (i.e., we
 ```{r}
 # Model for daily counts
 
-nday <- 30 # Number of days that each station is open
+nday <- 5 # Number of days that each station is open
 
-peak.migration <- 20 # Date of peak migration at each station
-sd.migration <- 6
+peak.migration <- 2.5 # Date of peak migration at each station
+sd.migration <- 1
 
 migration.phenology.df <- expand.grid(station = 1:nstation,
                                       year = 1:nyear,
                                       peak.migration = peak.migration,
                                       sd.migration = sd.migration)
 
-daily.obs.error <- 0.9
+daily.obs.error <- 0.3
 
 N.daily.df <- expand.grid(year = 1:nyear, station = 1:nstation, day = 1:nday) %>%
   full_join(x = . , y = N.station) %>%
@@ -284,7 +284,7 @@ The expected counts on each day for the first 5 years at station 1 are shown in 
 
 ```{r fig6, include = TRUE, message = FALSE, fig.width = 7, fig.height = 4, fig.cap="\\label{fig:fig6}Expected daily counts each year at station 1."}
 
-example.N.daily.df = subset(N.daily.df, station == 2 & year >=1)
+example.N.daily.df = subset(N.daily.df, station == 1 & year >=1)
 example.N.daily.df$year = paste0("year ",example.N.daily.df$year)
 daily.catch.plot.expected <- ggplot(data = example.N.daily.df) +
   geom_line(aes(x = day, y = lambda.mu), col = "gray35")+
@@ -365,17 +365,17 @@ cat("
       sd.trend.spatial ~ dunif(0,1) # Spatial variance in trends
       tau.trend.spatial <- pow(sd.trend.spatial, -2)
       
-      #logN0.sd <- 0.1
+      #logN0.sd <- 0.3
       #logN0.tau <- pow(logN0.sd,-2)
       
       for (r in 1:nregion){
-        trend[r] ~ dnorm(mean.trend,tau.trend.spatial) # Trend in each region is estimated as a random effect
+        trend[r] ~ dnorm(0,1) #dnorm(mean.trend,tau.trend.spatial) # Trend in each region is estimated as a random effect
         
         # Include uncertainty in initial abundance:
-        #logN0.uncert[r] ~ dnorm(logN0[r],logN0.tau) 
+        #logN0.uncert[r] ~ dunif(0,15) #dnorm(logN0[r],logN0.tau) 
 
         # No uncertainty in initial abundance
-        logN0.uncert[r] <- logN0[r] #~ dnorm(logN0[r],logN0.tau)    
+        logN0.uncert[r] <- logN0[r]
       }
       
       # Temporal variance in trend
@@ -387,7 +387,7 @@ cat("
         for (r in 1:nregion){
         
           # Exponential population model
-          logN[r,y] <- logN0.uncert[r] + trend[r] * (y-1) + noise[r,y] 
+          logN[r,y] <- logN0.uncert[r] + trend[r] * (y-1) + noise[r,y]
           noise[r,y] ~ dnorm(0,proc.tau)
           N[r,y] <- exp(logN[r,y])
         }
@@ -427,11 +427,11 @@ cat("
       # Estimate totals at each station each year
       #---------------------------------------------
       
-      mean.migrate.HYPER ~ dunif(0,nday)
-      sd.migrate.HYPER ~ dunif(0,20)
+      mean.migrate.HYPER <- 2.5 #~ dunif(0,nday)
+      sd.migrate.HYPER <- 1 #~ dunif(0,20)
       tau.migrate.HYPER <- pow(sd.migrate.HYPER,-2)
       
-      daily.noise.sd ~ dunif(0,2)
+      daily.noise.sd <- 0.3 #~ dunif(0,2)
       daily.noise.tau <- pow(daily.noise.sd,-2)
       
       for (s in 1:nstation){
@@ -534,17 +534,22 @@ out3 <- jags(data = jags.data,
                                     ),
              inits = inits,
              n.chains = 2,
-             n.thin = 25,
-             n.iter = 200000,
-             n.burnin = 100000)
+             n.thin = 5,
+             n.iter = 25000,
+             n.burnin = 15000)
 
 max(unlist(out3$Rhat),na.rm=TRUE)
-#save(out3, file = "~/Projects/MigrationTrends/scripts/jags_output/out3.RData")
+out3$mcmc.info$elapsed.mins
+
+#save(out3, file = "~/Projects/MigrationTrends/scripts/jags_output/out3_uncert_030.RData")
 ```
+
+
 
 ```{r, eval = TRUE}
 # Import results of Bayesian analysis
 #load(file = "~/Projects/MigrationTrends/scripts/jags_output/out3.RData")
+#load(file = "~/Projects/MigrationTrends/scripts/jags_output/out3_uncert_030.RData")
 ```
 
 \pagebreak
@@ -560,12 +565,16 @@ N.sum$logN <- log(N.sum$N)
 #Total continental population dynamics
 
 N.sum$q500 <- apply(out3$sims.list$N.total,2, function(x) quantile(x,0.500))
+
 N.sum$q025 <- apply(out3$sims.list$N.total,2, function(x) quantile(x,0.025))
+
 N.sum$q975 <- apply(out3$sims.list$N.total,2, function(x) quantile(x,0.975))
 
 N.sum.plot <- ggplot(data = N.sum)+
   geom_ribbon(aes(x = year, ymin = log(q025), ymax = log(q975), fill = "95% CRI"), alpha = 0.2)+
+  
   geom_line(aes(x = year, y = log(N), col = "Truth"), linetype = 2)+
+  
   geom_line(aes(x = year, y = log(q500), col = "Estimate"))+
   
   scale_color_manual(values=c("dodgerblue", "black"), name = "", guide = FALSE)+
@@ -574,7 +583,24 @@ N.sum.plot <- ggplot(data = N.sum)+
   xlab("Year")+
   theme_bw()
 
+
 suppressWarnings(print(N.sum.plot))
+
+
+N.sum.plot <- ggplot(data = N.sum)+
+  geom_ribbon(aes(x = year, ymin = q025, ymax = q975, fill = "95% CRI"), alpha = 0.2)+
+  
+  geom_line(aes(x = year, y = N, col = "Truth"), linetype = 2)+
+  
+  geom_line(aes(x = year, y = q500, col = "Estimate"))+
+  
+  scale_color_manual(values=c("dodgerblue", "black"), name = "", guide = FALSE)+
+  scale_fill_manual(values=c("dodgerblue","black"), name = "", guide = FALSE)+
+  ylab("Continental abundance")+
+  xlab("Year")+
+  theme_bw()
+
+
 ```
 
 ```{r fig9, include = TRUE, message = FALSE, fig.width = 5, fig.height = 3, fig.cap="\\label{fig:fig9}Posterior distribution of estimated national trend (blue histogram, median depicted by blue line) compared to true national trend (black dashed line)."}
@@ -582,7 +608,7 @@ suppressWarnings(print(N.sum.plot))
 trend.est <- apply(log(out3$sims.list$N.total),1, function(x) mean(diff(x)))
 
 hist(trend.est, col = "lightblue", border = "transparent", main = "",freq=FALSE, xlab = "Trend",
-     breaks = seq(-0.5, 0.5, length.out = 200))
+     breaks = seq(-0.2, 0.2, length.out = 200))
 
 abline(v = quantile(trend.est,0.5), lty = 1, lwd = 2, col = "dodgerblue")
 
@@ -648,7 +674,7 @@ trend.plot <- ggplot(data = trend)+
   theme_bw()+
   geom_hline(yintercept = 0, linetype = 2)+
   xlab("Region")+
-  ylab("10-year trend")
+  ylab("20-year trend")
 
 suppressWarnings(print(trend.plot))
 ```

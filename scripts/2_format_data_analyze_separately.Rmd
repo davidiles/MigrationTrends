@@ -44,30 +44,61 @@ Data provided by Danielle Ethier (BSC).  Has been pre-processed/cleaned.  Does n
 
 ```{r}
 dat_can <- rbind(read.csv("../data/migration_counts/CAN/LPBO.BLPW.2018.csv") %>% add_column(., station = "LPBO"),
-               read.csv("../data/migration_counts/CAN/PEPBO.BLPW.2018.csv") %>% add_column(., station = "PEPBO"),
-               read.csv("../data/migration_counts/CAN/TCBO.BLPW.2018.csv") %>% add_column(., station = "TCBO"))
+                 read.csv("../data/migration_counts/CAN/PEPBO.BLPW.2018.csv") %>% add_column(., station = "PEPBO"),
+                 read.csv("../data/migration_counts/CAN/TCBO.BLPW.2018.csv") %>% add_column(., station = "TCBO"))
 
+# Create a column to distinguish specific sites within a particular station
+dat_can$area <- 1
+dat_can$area[which(dat_can$SurveyAreaIdentifier == "LPBO2")] <- 2
+dat_can$area[which(dat_can$SurveyAreaIdentifier == "LPBO3")] <- 3
 
 # Number of days with data each year at each station
-#n.days.per.station <- aggregate(doy~YearCollected + SurveyAreaIdentifier + season, data = dat_1, FUN = length)
+day.range.per.station <- aggregate(doy~YearCollected + SurveyAreaIdentifier + season, data = dat_can, FUN = range)
+ndays.per.station <- aggregate(doy~YearCollected + SurveyAreaIdentifier + season, data = dat_can, FUN = length)
+```
 
-#plot.fall <- ggplot(data = subset(dat_1, season == "Fall")) +
-#  geom_line(aes(x = doy, y = ObservationCount), col = "blue")+
-# facet_grid(SurveyAreaIdentifier ~ YearCollected, scales = "free")+
-# theme_bw()
+### Format data for analysis and produce plots
+```{r}
+area_season_combinations <- unique(dat_can[,c("SurveyAreaIdentifier","season")])
 
-#print(plot.fall)
-
+for (i in 1:nrow(area_season_combinations)){
+  dat <- subset(dat_can, SurveyAreaIdentifier == area_season_combinations$SurveyAreaIdentifier[i] & season == area_season_combinations$season[i])
+  if (nrow(dat) == 0) next
+  min.day <- min(dat$doy)
+  max.day <- max(dat$doy)
+  min.year <- min(dat$YearCollected)
+  max.year <- max(dat$YearCollected)
+  
+  # Create a "full" dataframe to store counts on all days (including NAs)
+  dat_full <- expand.grid(YearCollected = seq(min.year,max.year),
+                          doy = seq(min.day,max.day))
+  
+  # Fill with counts
+  dat_full <- merge(dat_full, dat, all.x = TRUE)
+  
+  # Ensure relevant data is filled in
+  dat_full$SurveyAreaIdentifier = dat$SurveyAreaIdentifier[1]
+  dat_full$station = dat$station[1]
+  dat_full$area = dat$area[1]
+  dat_full$season = dat$season[1]
+  
+  # Plot daily counts in each season
+  daily.count.plot <- ggplot(data = dat_full) +
+    geom_line(aes(x = doy, y = ObservationCount), col = "blue")+
+    facet_wrap(.~YearCollected)+
+    ggtitle(dat_full$SurveyAreaIdentifier[1])+
+    theme_bw()
+  
+  pdf(file = paste0("../figures/station_plots/",dat_full$season[1],"_",dat_full$SurveyAreaIdentifier,".pdf"), width = 20,height=10)
+  print(daily.count.plot)
+  dev.off()
+}
 ```
 
 ```{r}
-#plot.spring <- ggplot(data = subset(dat_1, season == "Spring")) +
-#  geom_line(aes(x = doy, y = ObservationCount), col = "blue")+
-#  facet_grid(SurveyAreaIdentifier ~ YearCollected, scales = "free")+
-#  theme_bw()
 
-#print(plot.spring)
 ```
+
 
 ### Read in data from US stations
 
@@ -75,28 +106,28 @@ Data provided by Ricky Dunn.  Has been pre-processed/cleaned.  Includes "net hou
 
 ```{r}
 dat_usa <- rbind(readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - AIMS spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
-               
-               readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - BIBS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
-               
-               readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - BSBO fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
-               
-               readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - BSBO spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
-               
-               
-               readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - FBBS spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
-               
-               readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - MCCS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
-               
-               readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - MCCS spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
-               
-               readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - FBBS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
-               
-               readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - KWRS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"))
-               
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - BIBS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - BSBO fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - BSBO spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
+                 
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - FBBS spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - MCCS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - MCCS spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - FBBS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - KWRS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"))
+
 #datasets with different column names
 
 tmp = readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - PARC fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall")
-               
+
 colnames(tmp) <- colnames(dat_usa)
 
 dat_usa <- rbind(dat_usa, tmp)
