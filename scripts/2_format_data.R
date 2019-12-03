@@ -31,7 +31,7 @@ dat_can$area[which(dat_can$SurveyAreaIdentifier == "LPBO3")] <- 3
 #---------------------------------------------------------------------
 # Limit to data collected after 1995
 
-dat_can = subset(dat_can, YearCollected >= 2008)
+dat_can = subset(dat_can, YearCollected >= 1995)
 
 #---------------------------------------------------------------------
 
@@ -100,7 +100,7 @@ cat("
       
       # Separate intercepts for each sub-area within a station
       for (A in 1:narea){
-        intercept[A] ~ dunif(0,upper_limit)
+        intercept[A] ~ dunif(0,upper_limit*5)
         log.intercept[A] <- log(intercept[A])
         
         for (y in 1:nyear){
@@ -199,7 +199,7 @@ sink()
 # Prepare data for analysis
 #---------------------------------------------------------------------------------------------
 
-dat = subset(dat_combined, station == "LPBO" & season == "Fall")
+dat = subset(dat_combined, station == "TCBO" & season == "Fall")
 
 dat$doy_adjusted = dat$doy - dat$min_doy + 1
 dat$year_adjusted = dat$YearCollected - dat$min_year + 1
@@ -216,11 +216,11 @@ jags.data = list(daily.count = dat$ObservationCount,
                  year = dat$year_adjusted,
                  nyear = max(dat$year_adjusted),
                  
-                 upper_limit = max(dat$ObservationCount,na.rm=TRUE)*max(dat$doy_adjusted),
+                 upper_limit = max(aggregate(ObservationCount~year_adjusted + area, data = dat, FUN = sum)$ObservationCount)*5,
                  pi = pi
 )
 
-inits <- function() list(intercept = runif(jags.data$narea,0,1000))
+inits <- function() list(intercept = runif(jags.data$narea,0,100))
 out <- jags(data = jags.data,
             model.file = "cmmn_separate.jags",
             parameters.to.save = c(
@@ -242,9 +242,36 @@ out <- jags(data = jags.data,
             inits = inits,
             n.chains = 2,
             n.thin = 5,
-            n.iter = 2000,
-            n.burnin = 1000)
+            n.iter = 30000,
+            n.burnin = 15000)
 
 max(unlist(out$Rhat),na.rm = TRUE)
 mean(unlist(out$Rhat) > 1.10,na.rm = TRUE)
 
+
+#-----------------------------------------------------------------------
+# Annual indices
+#-----------------------------------------------------------------------
+
+N.area = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.500)), varnames = c("area","year"), value.name = "index.500")
+N.area$index.025 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.025)), varnames = c("area","year"), value.name = "index.025")$index.025
+N.area$index.975 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.975)), varnames = c("area","year"), value.name = "index.975")$index.975
+
+N.total = data.frame(area = "total",
+                     year = 1:jags.data$nyear,
+                     index.500 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.500)),
+                     index.025 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.025)),
+                     index.975 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.975)))
+
+N.area$area = factor(N.area$area)
+
+N.total = rbind(N.total,N.area)
+N.total$year = N.total$year + dat$min_year[1] - 1
+
+area.plot = ggplot( data = N.total ) +
+  geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975), col = factor(area)), width = 0)+
+  geom_point(aes(x = year, y = log(index.500), col = factor(area)))+
+  facet_grid(area~., scales = "free")+
+  theme_bw()
+
+print(area.plot)

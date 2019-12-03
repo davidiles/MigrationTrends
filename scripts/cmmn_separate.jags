@@ -13,7 +13,7 @@
       
       # Separate intercepts for each sub-area within a station
       for (A in 1:narea){
-        intercept[A] ~ dunif(0,upper_limit)
+        intercept[A] ~ dunif(0,upper_limit*5)
         log.intercept[A] <- log(intercept[A])
         
         for (y in 1:nyear){
