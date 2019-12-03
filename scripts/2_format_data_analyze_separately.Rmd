@@ -1,7 +1,7 @@
 ---
-title: "National trend analysis using migration counts and stable isotopes"
-author: "Dave Iles"
-date: "October 2, 2019"
+title: "State-space model and analysis of individual stations"
+author: "David Iles"
+date: "Dec 02, 2019"
 fontsize: 10pt
 output:
   rmarkdown::pdf_document:
@@ -52,6 +52,11 @@ dat_can$area <- 1
 dat_can$area[which(dat_can$SurveyAreaIdentifier == "LPBO2")] <- 2
 dat_can$area[which(dat_can$SurveyAreaIdentifier == "LPBO3")] <- 3
 
+#---------------------------------------------------------------------
+# Limit to data collected after 1995
+#---------------------------------------------------------------------
+dat_can = subset(dat_can, YearCollected >= 1995)
+
 # Number of days with data each year at each station
 day.range.per.station <- aggregate(doy~YearCollected + SurveyAreaIdentifier + season, data = dat_can, FUN = range)
 ndays.per.station <- aggregate(doy~YearCollected + SurveyAreaIdentifier + season, data = dat_can, FUN = length)
@@ -60,18 +65,18 @@ ndays.per.station <- aggregate(doy~YearCollected + SurveyAreaIdentifier + season
 ### Format data for analysis and produce plots
 ```{r}
 area_season_combinations <- unique(dat_can[,c("SurveyAreaIdentifier","season")])
-
+combined_data = data.frame()
 for (i in 1:nrow(area_season_combinations)){
   dat <- subset(dat_can, SurveyAreaIdentifier == area_season_combinations$SurveyAreaIdentifier[i] & season == area_season_combinations$season[i])
   if (nrow(dat) == 0) next
-  min.day <- min(dat$doy)
-  max.day <- max(dat$doy)
+  min.doy <- min(dat$doy)
+  max.doy <- max(dat$doy)
   min.year <- min(dat$YearCollected)
   max.year <- max(dat$YearCollected)
   
   # Create a "full" dataframe to store counts on all days (including NAs)
   dat_full <- expand.grid(YearCollected = seq(min.year,max.year),
-                          doy = seq(min.day,max.day))
+                          doy = seq(min.doy,max.doy))
   
   # Fill with counts
   dat_full <- merge(dat_full, dat, all.x = TRUE)
@@ -81,6 +86,10 @@ for (i in 1:nrow(area_season_combinations)){
   dat_full$station = dat$station[1]
   dat_full$area = dat$area[1]
   dat_full$season = dat$season[1]
+  dat_full$min.doy = min.doy
+  dat_full$max.doy = max.doy
+  dat_full$min.year = min.year
+  dat_full$max.year = max.year
   
   # Plot daily counts in each season
   daily.count.plot <- ggplot(data = dat_full) +
@@ -89,22 +98,289 @@ for (i in 1:nrow(area_season_combinations)){
     ggtitle(dat_full$SurveyAreaIdentifier[1])+
     theme_bw()
   
-  pdf(file = paste0("../figures/station_plots/",dat_full$season[1],"_",dat_full$SurveyAreaIdentifier,".pdf"), width = 20,height=10)
-  print(daily.count.plot)
-  dev.off()
+  #pdf(file = paste0("../figures/station_plots/",dat_full$season[1],"_",dat_full$SurveyAreaIdentifier,".pdf"), width = 20,height=10)
+  #print(daily.count.plot)
+  #dev.off()
+  
+  combined_data = rbind(combined_data, dat_full)
 }
+
 ```
 
 ```{r}
+sink("cmmn_separate.jags")
+cat("
+    
+    model {
+      
+      #---------------------------------------------
+      # Model for population dynamics
+      #---------------------------------------------
+
+      intercept ~ dunif(0,10000)
+      log.intercept <- log(intercept)
+      log.trend ~ dnorm(0,1)
+      proc.sd ~ dunif(0,2)
+      proc.tau <- pow(proc.sd,-2)
+      
+      for (y in 1:nyear){
+        
+        mu[y] <- log.intercept + log.trend*(y-1)
+        logN[y] <- mu[y] + noise[y]
+        noise[y] ~ dnorm(0,proc.tau)
+        N[y] <- exp(logN[y])
+        
+      } # close year loop
+      
+      #---------------------------------------------
+      # Model for daily counts
+      #---------------------------------------------
+
+      daily.noise.sd ~ dunif(0,2)
+      daily.noise.tau <- pow(daily.noise.sd,-2)
+      
+      mean.migrate ~ dunif(1, nday)
+      sd.migrate ~ dunif(0,nday)
+        
+      for (y in 1:nyear){
+          for (d in 1:nday){
+            
+            norm.density[d,y] <- 1/(sqrt(2*pi)*sd.migrate)*exp(-((d-mean.migrate)^2/(2*sd.migrate^2)))
+            
+            # Expected count on each day
+            expected.count[d,y] <- norm.density[d,y] * N[y]
+            
+            # Daily observation error
+            daily.noise[d,y] ~ dnorm(0,daily.noise.tau)
+            
+            lambda[d,y] <- exp(log(expected.count[d,y]) + daily.noise[d,y])
+            
+          } # close day loop
+          
+        } # close year loop
+      
+      for (i in 1:nobs){
+        expected[i] <- expected.count[day[i],year[i]]
+        lam[i] <- lambda[day[i],year[i]]
+        daily.count[i] ~ dpois(lam[i])
+      }
+      
+      #---------------------------------------------
+      # Goodness-of-fit
+      #---------------------------------------------
+      for (i in 1:nobs){
+        
+        #-----------------------------------------------
+        # Assess fit at level 1 (deviations from lambda)
+        #-----------------------------------------------
+        sim.count.1[i] ~ dpois(lam[i])
+        
+        sqerror.obs.1[i] <- pow(daily.count[i] - lam[i], 2)
+        sqerror.sim.1[i] <- pow(sim.count.1[i] - lam[i], 2)
+        
+        X2.obs.1[i]      <- sqerror.obs.1[i]/lam[i]
+        X2.sim.1[i]      <- sqerror.sim.1[i]/lam[i]
+        
+        #-----------------------------------------------
+        # Assess fit at level 2 (deviations from expected)
+        #-----------------------------------------------
+        sim.noise[i] ~ dnorm(0,daily.noise.tau)
+        sim.count.2[i] ~ dpois(exp(log(expected[i]) + sim.noise[i]))
+        
+        sqerror.obs.2[i] <- pow(daily.count[i] - expected[i], 2)
+        sqerror.sim.2[i] <- pow(sim.count.2[i] - expected[i], 2)
+        
+        X2.obs.2[i]      <- sqerror.obs.2[i]/expected[i]
+        X2.sim.2[i]      <- sqerror.sim.2[i]/expected[i]
+        
+      }
+
+      chi2.obs.1 <- sum(X2.obs.1[])
+      chi2.sim.1 <- sum(X2.sim.1[])
+      
+      chi2.obs.2 <- sum(X2.obs.2[])
+      chi2.sim.2 <- sum(X2.sim.2[])
+      
+    }
+    ",fill = TRUE)
+sink()
+```
+
+```{r}
+dat_full = subset(combined_data, SurveyAreaIdentifier == "LPBO1" & season == "Fall")
+dat_full$doy_adjusted = dat_full$doy - dat_full$min.doy + 1
+dat_full$year_adjusted = dat_full$YearCollected - dat_full$min.year + 1
+
+jags.data = list(daily.count = dat_full$ObservationCount,
+                 nobs = nrow(dat_full),
+                 
+                 day = dat_full$doy_adjusted,
+                 nday = max(dat_full$doy_adjusted),
+                 
+                 year = dat_full$year_adjusted,
+                 nyear = max(dat_full$year_adjusted),
+                 
+                 pi = pi
+)
+
+inits <- function() list(intercept = runif(1,0,1000))
+out <- jags(data = jags.data,
+            model.file = "cmmn_separate.jags",
+            parameters.to.save = c("log.intercept",
+                                   "log.trend",
+                                   "proc.sd",
+                                   "daily.noise.sd",
+                                   "mean.migrate",
+                                   "sd.migrate",
+                                   
+                                   "N",
+                                   "expected",
+                                   "lam",
+                                   
+                                   "sqerror.obs.1",
+                                   "sqerror.sim.1",
+                                   
+                                   "chi2.obs.1",
+                                   "chi2.sim.1",
+                                   
+                                   "sqerror.obs.2",
+                                   "sqerror.sim.2",
+                                   
+                                   "chi2.obs.2",
+                                   "chi2.sim.2"
+                                   
+                                   
+            ),
+            inits = inits,
+            n.chains = 3,
+            n.thin = 5,
+            n.iter = 20000,
+            n.burnin = 10000)
+
+max(unlist(out$Rhat),na.rm = TRUE)
+mean(unlist(out$Rhat) > 1.10,na.rm = TRUE)
+
+```
+
+### Assess model fit
+```{r}
+sims = out$sims.list
+
+dat_full$sim.count.2 = apply(sims$sim.count.2)
+
+dat_full$expected = apply(sims$expected,2,mean)
+dat_full$resid = abs(dat_full$ObservationCount - dat_full$expected)/(dat_full$expected)
+avg.resid.plot = ggplot(data = aggregate(resid~YearCollected, data = dat_full, FUN = mean)) +
+  
+  geom_point(aes(x = YearCollected, y = resid))+
+  ylab("Mean Daily Residual")+
+  xlab("Year")+
+  ggtitle(paste0(dat_full$SurveyAreaIdentifier,"_",dat_full$season))+
+  #facet_wrap(YearCollected~.)+
+  #geom_abline(intercept = 0, slope = 1)+
+  theme_bw()
+print(avg.resid.plot)
+
+dat_full$sqerror.2 = apply(sims$sqerror.obs.2,2,mean)
+MSE.plot = ggplot(data = aggregate(sqerror.2~YearCollected, data = dat_full, FUN = mean)) +
+  
+  geom_point(aes(x = YearCollected, y = sqerror.2))+
+  ylab("MSE")+
+  xlab("Year")+
+  ggtitle(paste0(dat_full$SurveyAreaIdentifier,"_",dat_full$season))+
+  theme_bw()
+print(MSE.plot)
+
+
+#------------------------------------
+# Posterior predictive check
+#------------------------------------
+ppc.plot.1 = ggplot() +
+  geom_point(aes(x = sims$chi2.obs.1, y = sims$chi2.sim.1))+
+  geom_point(aes(x = sims$chi2.obs.1[which(sims$chi2.obs.1 > sims$chi2.sim.1)], y = sims$chi2.sim.1[which(sims$chi2.obs.1 > sims$chi2.sim.1)]), col = "red")+
+  
+  geom_abline(intercept = 0, slope = 1)+
+  xlab("Fit statistic to actual data")+
+  ylab("Fit statistic to simulated data")+
+  ggtitle(paste0("Bayesian p-value = ", round(mean(sims$chi2.sim.1 > sims$chi2.obs.1),3)))+
+  theme_bw()
+print(ppc.plot.1)
+
+ppc.plot.2 = ggplot() +
+  geom_point(aes(x = sims$chi2.obs.2, y = sims$chi2.sim.2))+
+  geom_point(aes(x = sims$chi2.obs.2[which(sims$chi2.obs.2 > sims$chi2.sim.2)], y = sims$chi2.sim.2[which(sims$chi2.obs.2 > sims$chi2.sim.2)]), col = "red")+
+  
+  geom_abline(intercept = 0, slope = 1)+
+  xlab("Fit statistic to actual data")+
+  ylab("Fit statistic to simulated data")+
+  ggtitle(paste0("Bayesian p-value = ", round(mean(sims$chi2.sim.2 > sims$chi2.obs.2),3)))+
+  theme_bw()
+print(ppc.plot.2)
+
+
+dat_full$sqerror.obs.1
+apply(sims$sqerror.obs.1,2,mean)
+```
+
+
+```{r}
+year_seq = 1:jags.data$nyear + dat_full$min.year[1] - 1
+day_seq = 1:jags.data$nday + dat_full$min.doy[1] - 1
+
+annual.plot = ggplot()+
+  
+  geom_errorbar(aes(x = year_seq, ymin = apply(sims$N,2,function(x)quantile(x,0.025)),ymax = apply(sims$N,2,function(x) quantile(x,0.975))), width = 0)+
+  geom_point(aes(x = year_seq, y = apply(sims$N,2,function(x)quantile(x,0.5))))+
+  
+  
+  ylab("Index")+
+  xlab("Year")+
+  ggtitle(paste0(dat_full$SurveyAreaIdentifier,"_",dat_full$season))+
+  theme_bw()
+
+print(annual.plot)
 
 ```
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r, eval = FALSE, include = FALSE}
 ### Read in data from US stations
 
-Data provided by Ricky Dunn.  Has been pre-processed/cleaned.  Includes "net hours" that can be used as offsets.
+#Data provided by Ricky Dunn.  Has been pre-processed/cleaned.  Includes "net hours" that can be used as offsets.
 
-```{r}
+
 dat_usa <- rbind(readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - AIMS spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
                  
                  readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - BIBS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
