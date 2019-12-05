@@ -129,7 +129,7 @@ for (i in 1:nrow(us_windows)){
   station = us_windows$station[i]
   area = us_windows$area[i]
   season = us_windows$season[i]
-
+  
   # data inside that range
   dat_usa2 = rbind(dat_usa2, subset(dat_usa, station == x$station & area == x$area & season == x$season & doy >= x$start_date & doy <= x$end_date))
 }
@@ -364,133 +364,138 @@ sink()
 #******************************************************************************************************************************************
 #******************************************************************************************************************************************
 
-dat = subset(dat_combined, station == "BSBO" & season == "Spring")
+station_season_combinations = unique(dat_combined[,c("station","season")])
 
-dat$doy_adjusted = dat$doy - min(dat$doy) + 1
-dat$year_adjusted = dat$YearCollected - min(dat$YearCollected) + 1
-dat = subset(dat, !is.na(ObservationCount))
-
-jags.data = list(daily.count = dat$ObservationCount,
-                 nobs = nrow(dat),
-                 
-                 area = dat$area,
-                 narea = max(dat$area),
-                 
-                 day = dat$doy_adjusted,
-                 nday = max(dat$doy_adjusted),
-                 
-                 year = dat$year_adjusted,
-                 nyear = max(dat$year_adjusted),
-                 
-                 upper_limit = max(aggregate(ObservationCount~year_adjusted + area, data = dat, FUN = sum)$ObservationCount)*5,
-                 
-                 log.offset = log(dat$net.hrs),
-                 pi = pi
-)
-
-inits <- function() list(intercept = runif(jags.data$narea,0,100))
-out <- jags(data = jags.data,
-            model.file = "cmmn_separate.jags",
-            parameters.to.save = c(
-                                   "log.trend",
-                                   "proc.sd",
-                                   
-                                   "log.intercept",
-                                   "daily.noise.sd",
-                                   "mean.migrate",
-                                   "sd.migrate",
-                                   
-                                   "N.total",
-                                   "N",
-                                   "lam"
-                                   
-                                   
-            ),
-            inits = inits,
-            n.chains = 2,
-            n.thin = 5,
-            n.iter = 30000,
-            n.burnin = 15000)
-
-max(unlist(out$Rhat),na.rm = TRUE)
-mean(unlist(out$Rhat) > 1.10,na.rm = TRUE)
-
-#******************************************************************************************************************************************
-#******************************************************************************************************************************************
-# PART 4: SUMMARIZE RESULTS
-#******************************************************************************************************************************************
-#******************************************************************************************************************************************
-
-# Annual indices
-N.area = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.500)), varnames = c("area","year"), value.name = "index.500")
-N.area$index.025 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.025)), varnames = c("area","year"), value.name = "index.025")$index.025
-N.area$index.975 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.975)), varnames = c("area","year"), value.name = "index.975")$index.975
-
-N.overall = data.frame(area = "Overall",
-                     year = 1:jags.data$nyear,
-                     index.500 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.500)),
-                     index.025 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.025)),
-                     index.975 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.975)))
-
-N.area$area = factor(N.area$area)
-
-N.overall = rbind(N.overall,N.area)
-N.overall$year = N.overall$year + dat$min_year[1] - 1
-
-area.plot = ggplot( data = N.overall ) +
-  geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975), col = factor(area)), width = 0)+
-  geom_point(aes(x = year, y = log(index.500), col = factor(area)))+
-  facet_grid(area~., scales = "free")+
-  ylab("Index")+
-  xlab("Year")+
-  scale_color_manual(values = RColorBrewer::brewer.pal(length(unique(N.overall$area)), "Dark2"), name = "Station/Area")+
-  theme_bw()
-
-print(area.plot)
-
-overall.plot = ggplot( data = subset(N.overall, area == "Overall" & year <= 2014) ) +
-  geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975)), width = 0)+
-  geom_point(aes(x = year, y = log(index.500)))+
-  ylab("Index")+
-  xlab("Year")+
-  ggtitle(paste0(dat$station[1]," (Overall)"))+
-  theme_bw()
-
-print(overall.plot)
-
-N.sums = data.frame(year = unique(N.overall$year))
-for (y in unique(dat$year_adjusted)){
-  seasonal.sum.est = apply(out$sims.list$lam[,which(dat$year_adjusted == y)],1,sum)
-  N.sums$sum.500[y] = quantile(seasonal.sum.est, 0.5)
-  N.sums$sum.025[y] = quantile(seasonal.sum.est, 0.025)
-  N.sums$sum.975[y] = quantile(seasonal.sum.est, 0.975)
-
+for (i in 1:nrow(station_season_combinations)){
+  
+  dat = subset(dat_combined, station == station_season_combinations$station[i] & season == station_season_combinations$season[i])
+  
+  dat$doy_adjusted = dat$doy - min(dat$doy) + 1
+  dat$year_adjusted = dat$YearCollected - min(dat$YearCollected) + 1
+  dat = subset(dat, !is.na(ObservationCount))
+  
+  jags.data = list(daily.count = dat$ObservationCount,
+                   nobs = nrow(dat),
+                   
+                   area = dat$area,
+                   narea = max(dat$area),
+                   
+                   day = dat$doy_adjusted,
+                   nday = max(dat$doy_adjusted),
+                   
+                   year = dat$year_adjusted,
+                   nyear = max(dat$year_adjusted),
+                   
+                   upper_limit = max(aggregate(ObservationCount~year_adjusted + area, data = dat, FUN = sum)$ObservationCount)*5,
+                   
+                   log.offset = log(dat$net.hrs),
+                   pi = pi
+  )
+  
+  inits <- function() list(intercept = runif(jags.data$narea,0,100))
+  out <- jags(data = jags.data,
+              model.file = "cmmn_separate.jags",
+              parameters.to.save = c(
+                "log.trend",
+                "proc.sd",
+                
+                "log.intercept",
+                "daily.noise.sd",
+                "mean.migrate",
+                "sd.migrate",
+                
+                "N.total",
+                "N"
+                
+                
+              ),
+              inits = inits,
+              n.chains = 2,
+              n.thin = 10,
+              n.iter = 2000,
+              n.burnin = 1000)
+  
+  max(unlist(out$Rhat),na.rm = TRUE)
+  mean(unlist(out$Rhat) > 1.10,na.rm = TRUE)
+  
+  save(out, file = paste0("./jags_output/",station_season_combinations$station[i],"_",station_season_combinations$season[i],".RData"))
+  #******************************************************************************************************************************************
+  #******************************************************************************************************************************************
+  # PART 4: SUMMARIZE RESULTS
+  #******************************************************************************************************************************************
+  #******************************************************************************************************************************************
+  
+  # Annual indices
+  N.area = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.500)), varnames = c("area","year"), value.name = "index.500")
+  N.area$index.025 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.025)), varnames = c("area","year"), value.name = "index.025")$index.025
+  N.area$index.975 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.975)), varnames = c("area","year"), value.name = "index.975")$index.975
+  
+  N.overall = data.frame(area = "Overall",
+                         year = 1:jags.data$nyear,
+                         index.500 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.500)),
+                         index.025 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.025)),
+                         index.975 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.975)))
+  
+  N.area$area = factor(N.area$area)
+  
+  N.overall = rbind(N.overall,N.area)
+  N.overall$year = N.overall$year + dat$min_year[1] - 1
+  
+  # area.plot = ggplot( data = N.overall ) +
+  #   geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975), col = factor(area)), width = 0)+
+  #   geom_point(aes(x = year, y = log(index.500), col = factor(area)))+
+  #   facet_grid(area~., scales = "free")+
+  #   ylab("Index")+
+  #   xlab("Year")+
+  #   scale_color_manual(values = RColorBrewer::brewer.pal(length(unique(N.overall$area)), "Dark2"), name = "Station/Area")+
+  #   theme_bw()
+  # 
+  # print(area.plot)
+  # 
+  overall.plot = ggplot( data = subset(N.overall, area == "Overall" & year <= 2014) ) +
+    geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975)), width = 0)+
+    geom_point(aes(x = year, y = log(index.500)))+
+    ylab("Index")+
+    xlab("Year")+
+    ggtitle(paste0(dat$station[1]," (Overall)"))+
+    theme_bw()
+  
+  print(overall.plot)
+  
+  # N.sums = data.frame(year = unique(N.overall$year))
+  # for (y in unique(dat$year_adjusted)){
+  #   seasonal.sum.est = apply(out$sims.list$lam[,which(dat$year_adjusted == y)],1,sum)
+  #   N.sums$sum.500[y] = quantile(seasonal.sum.est, 0.5)
+  #   N.sums$sum.025[y] = quantile(seasonal.sum.est, 0.025)
+  #   N.sums$sum.975[y] = quantile(seasonal.sum.est, 0.975)
+  #   
+  # }
+  # 
+  # sum.plot = ggplot( data = subset(N.sums, year <= 2014) ) +
+  #   geom_errorbar(aes(x = year, ymin = log(sum.025), ymax = log(sum.975)), width = 0)+
+  #   geom_point(aes(x = year, y = log(sum.500)))+
+  #   ylab("Index")+
+  #   xlab("Year")+
+  #   ggtitle(paste0(dat$station[1]," (Overall)"))+
+  #   theme_bw()
+  # 
+  # print(sum.plot)
+  # 
+  # daily.plot = ggplot(data = dat)+
+  #   geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
+  #   xlab("Day of Year")+
+  #   ylab("Daily Estimated Total")+
+  #   facet_grid(area~YearCollected)+
+  #   theme_bw()
+  # print(daily.plot)
+  # 
+  # annual.plot = ggplot(data = aggregate(ObservationCount~YearCollected, data = dat, FUN = sum))+
+  #   geom_point(aes(x = YearCollected, y = ObservationCount), col = "blue")+
+  #   xlab("Year")+
+  #   ylab("Seasonal Total")+
+  #   theme_bw()
+  # print(annual.plot)
 }
-
-sum.plot = ggplot( data = subset(N.sums, year <= 2014) ) +
-  geom_errorbar(aes(x = year, ymin = log(sum.025), ymax = log(sum.975)), width = 0)+
-  geom_point(aes(x = year, y = log(sum.500)))+
-  ylab("Index")+
-  xlab("Year")+
-  ggtitle(paste0(dat$station[1]," (Overall)"))+
-  theme_bw()
-
-print(sum.plot)
-
-daily.plot = ggplot(data = dat)+
-  geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
-  xlab("Day of Year")+
-  ylab("Daily Estimated Total")+
-  facet_grid(area~YearCollected)+
-  theme_bw()
-print(daily.plot)
-
-annual.plot = ggplot(data = aggregate(ObservationCount~YearCollected, data = dat, FUN = sum))+
-  geom_point(aes(x = YearCollected, y = ObservationCount), col = "blue")+
-  xlab("Year")+
-  ylab("Seasonal Total")+
-  theme_bw()
-print(annual.plot)
 
 
 
