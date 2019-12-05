@@ -53,7 +53,7 @@
               # Daily observation error
               daily.noise[A,d,y] ~ dnorm(0,daily.noise.tau[A])
               
-              lambda[A,d,y] <- exp(log(expected.count[A,d,y]) + daily.noise[A,d,y])
+              log.lambda[A,d,y] <- log(expected.count[A,d,y]) + daily.noise[A,d,y]
               
             } # close day loop
             
@@ -62,8 +62,8 @@
       } # close area loop
       
       for (i in 1:nobs){
-        expected[i] <- expected.count[area[i],day[i],year[i]]
-        lam[i] <- lambda[area[i],day[i],year[i]]
+        log.lam[i] <- log.lambda[area[i],day[i],year[i]] + log.offset[i]
+        lam[i] <- exp(log.lam[i])
         daily.count[i] ~ dpois(lam[i])
       }
       

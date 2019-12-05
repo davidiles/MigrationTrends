@@ -13,9 +13,15 @@ lapply(my_packs, require, character.only = TRUE)
 
 rm(list=ls())
 
-#---------------------------------------------------------------------
-# Read/format data from BSC
-#---------------------------------------------------------------------
+#******************************************************************************************************************************************
+#******************************************************************************************************************************************
+# PART 1: FORMAT MIGRATION COUNT DATA
+#******************************************************************************************************************************************
+#******************************************************************************************************************************************
+
+#------------------------------------------------------------------------------------------------------------------------------------------
+# Read/format data from BSC (Canadian data)
+#------------------------------------------------------------------------------------------------------------------------------------------
 
 #Data provided by Danielle Ethier (BSC).  Has been pre-processed/cleaned.  Does not include offsets or effort (i.e., hours nets were open).
 
@@ -28,21 +34,16 @@ dat_can$area <- 1
 dat_can$area[which(dat_can$SurveyAreaIdentifier == "LPBO2")] <- 2
 dat_can$area[which(dat_can$SurveyAreaIdentifier == "LPBO3")] <- 3
 
-#---------------------------------------------------------------------
-# Limit to data collected after 1995
-
-dat_can = subset(dat_can, YearCollected >= 1995)
-
-#---------------------------------------------------------------------
-
 # Number of days with data each year at each station
 day_range_per_station <- aggregate(doy~YearCollected + SurveyAreaIdentifier + season, data = dat_can, FUN = range)
 ndays_per_station <- aggregate(doy~YearCollected + SurveyAreaIdentifier + season, data = dat_can, FUN = length)
+years_per_station <- aggregate(YearCollected ~ SurveyAreaIdentifier + season, data = dat_can, FUN = range)
 
-area_season_combinations <- unique(dat_can[,c("SurveyAreaIdentifier","season")])
-dat_combined = data.frame()
-for (i in 1:nrow(area_season_combinations)){
-  dat <- subset(dat_can, SurveyAreaIdentifier == area_season_combinations$SurveyAreaIdentifier[i] & season == area_season_combinations$season[i])
+# Ensure that all stations/days/years/seasons are included as data
+area_season_combinations_can <- unique(dat_can[,c("SurveyAreaIdentifier","season")])
+dat_combined_can = data.frame()
+for (i in 1:nrow(area_season_combinations_can)){
+  dat <- subset(dat_can, SurveyAreaIdentifier == area_season_combinations_can$SurveyAreaIdentifier[i] & season == area_season_combinations_can$season[i])
   if (nrow(dat) == 0) next
   min_doy <- min(dat$doy)
   max_doy <- max(dat$doy)
@@ -77,8 +78,170 @@ for (i in 1:nrow(area_season_combinations)){
   #print(daily.count.plot)
   #dev.off()
   
-  dat_combined = rbind(dat_combined, dat_full)
+  dat_combined_can = rbind(dat_combined_can, dat_full)
 }
+dat_combined_can$country = "CAN"
+
+#------------------------------------------------------------------------------------------------------------------------------------------
+# Read/format data from Ricky Dunn (USA data)
+#------------------------------------------------------------------------------------------------------------------------------------------
+dat_usa <- rbind(readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - AIMS spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - BIBS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - BSBO fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - BSBO spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
+                 
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - FBBS spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - MCCS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - MCCS spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - FBBS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - KWRS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"))
+
+# datasets with different column names
+tmp = readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - PARC fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall")
+
+colnames(tmp) <- colnames(dat_usa)
+
+dat_usa <- rbind(dat_usa, tmp)
+rm(tmp)    
+
+# Fill net N/100 net-hr column
+dat_usa$`N/100 net-hr` = dat_usa$N/dat_usa$`Net-hrs`*100
+dat_usa = na.omit(dat_usa)
+summary(dat_usa)
+
+# Change column names
+colnames(dat_usa) = c("station","YearCollected","doy","net.hrs","ObservationCount","N.per.100.net.hrs","season")
+dat_usa$area = 1
+
+# Load analysis windows for each station and restrict data to those dates
+us_windows = read.csv("../data/migration_counts/USA/US_station_windows.csv")
+dat_usa2 = data.frame()
+for (i in 1:nrow(us_windows)){
+  x = us_windows[i,]
+  station = us_windows$station[i]
+  area = us_windows$area[i]
+  season = us_windows$season[i]
+
+  # data inside that range
+  dat_usa2 = rbind(dat_usa2, subset(dat_usa, station == x$station & area == x$area & season == x$season & doy >= x$start_date & doy <= x$end_date))
+}
+dat_usa = dat_usa2
+dat_usa = merge(dat_usa, us_windows, all.x = TRUE)
+
+
+area_season_combinations_usa <- unique(dat_usa[,c("station","season")])
+dat_combined_usa = data.frame()
+for (i in 1:nrow(area_season_combinations_usa)){
+  dat <- subset(dat_usa, station == area_season_combinations_usa$station[i] & season == area_season_combinations_usa$season[i])
+  if (nrow(dat) == 0) next
+  min_doy <- min(dat$doy)
+  max_doy <- max(dat$doy)
+  min_year <- min(dat$YearCollected)
+  max_year <- max(dat$YearCollected)
+  
+  # Create a "full" dataframe to store counts on all days (including NAs)
+  dat_full <- expand.grid(YearCollected = seq(min_year,max_year),
+                          doy = seq(min_doy,max_doy))
+  
+  # Fill with counts
+  dat_full <- merge(dat_full, dat, all.x = TRUE)
+  
+  # Ensure relevant data is filled in
+  dat_full$station = dat$station[1]
+  dat_full$station = dat$station[1]
+  dat_full$area = dat$area[1]
+  dat_full$season = dat$season[1]
+  dat_full$min_doy = min_doy
+  dat_full$max_doy = max_doy
+  dat_full$min_year = min_year
+  dat_full$max_year = max_year
+  
+  # Plot daily counts in each season
+  daily_count_plot <- ggplot(data = dat_full) +
+    geom_line(aes(x = doy, y = ObservationCount), col = "blue")+
+    facet_wrap(.~YearCollected)+
+    ggtitle(dat_full$station[1])+
+    theme_bw()
+  
+  dat_combined_usa = rbind(dat_combined_usa, dat_full)
+}
+dat_combined_usa$country = "USA"
+
+#------------------------------------------------------------------------------------------------------------------------------------------
+# Combine CAN and USA data into a single dataframe; generate plots
+#------------------------------------------------------------------------------------------------------------------------------------------
+dat_combined = dplyr::bind_rows(dat_combined_can, dat_combined_usa)
+
+# For any sites without recorded net hours, fill in with 0.001 (doesnt change results)
+dat_combined$net.hrs[which(is.na(dat_combined$net.hrs))] = 0.001
+
+rm(list=setdiff(ls(), c("dat_combined")))
+
+# Limit to data collected after 1995
+dat_combined = subset(dat_combined, YearCollected >= 1995 & YearCollected <= 2015)
+
+
+#----------------------------------
+# Plots of daily counts
+#----------------------------------
+
+# CAN Spring
+CAN_Spring_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Spring")) +
+  geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
+  facet_grid(station~YearCollected, scales = "free_y")+
+  xlab("Day of Year")+
+  ylab("Count")+
+  theme_bw()
+pdf(file = paste0(file = "../figures/CAN_Spring_plot.pdf"), width = 30,height=6)
+print(CAN_Spring_plot )
+dev.off()
+
+# CAN Fall
+CAN_Fall_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Fall")) +
+  geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
+  facet_grid(station~YearCollected, scales = "free_y")+
+  xlab("Day of Year")+
+  ylab("Count")+
+  theme_bw()
+pdf(file = paste0(file = "../figures/CAN_Fall_plot.pdf"), width = 30,height=6)
+print(CAN_Fall_plot )
+dev.off()
+
+# USA Spring
+USA_Spring_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Spring")) +
+  geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
+  facet_grid(station~YearCollected, scales = "free_y")+
+  xlab("Day of Year")+
+  ylab("Count(N/100 net hours)")+
+  theme_bw()
+pdf(file = paste0(file = "../figures/USA_Spring_plot.pdf"), width = 30,height=6)
+print(USA_Spring_plot )
+dev.off()
+
+# USA Fall
+USA_Fall_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Fall")) +
+  geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
+  facet_grid(station~YearCollected, scales = "free_y")+
+  xlab("Day of Year")+
+  ylab("Count(N/100 net hours)")+
+  theme_bw()
+pdf(file = paste0(file = "../figures/USA_Fall_plot.pdf"), width = 30,height=6)
+print(USA_Fall_plot )
+dev.off()
+
+#******************************************************************************************************************************************
+#******************************************************************************************************************************************
+# PART 2: SET UP ANALYSIS
+#******************************************************************************************************************************************
+#******************************************************************************************************************************************
 
 #---------------------------------------------------------------------------------------------
 # Bayesian analysis (separate for each station)
@@ -140,7 +303,7 @@ cat("
               # Daily observation error
               daily.noise[A,d,y] ~ dnorm(0,daily.noise.tau[A])
               
-              lambda[A,d,y] <- exp(log(expected.count[A,d,y]) + daily.noise[A,d,y])
+              log.lambda[A,d,y] <- log(expected.count[A,d,y]) + daily.noise[A,d,y]
               
             } # close day loop
             
@@ -149,8 +312,8 @@ cat("
       } # close area loop
       
       for (i in 1:nobs){
-        expected[i] <- expected.count[area[i],day[i],year[i]]
-        lam[i] <- lambda[area[i],day[i],year[i]]
+        log.lam[i] <- log.lambda[area[i],day[i],year[i]] + log.offset[i]
+        lam[i] <- exp(log.lam[i])
         daily.count[i] ~ dpois(lam[i])
       }
       
@@ -195,14 +358,17 @@ cat("
     ",fill = TRUE)
 sink()
 
-#---------------------------------------------------------------------------------------------
-# Prepare data for analysis
-#---------------------------------------------------------------------------------------------
+#******************************************************************************************************************************************
+#******************************************************************************************************************************************
+# PART 3: RUN ANALYSIS
+#******************************************************************************************************************************************
+#******************************************************************************************************************************************
 
-dat = subset(dat_combined, station == "TCBO" & season == "Fall")
+dat = subset(dat_combined, station == "BSBO" & season == "Spring")
 
-dat$doy_adjusted = dat$doy - dat$min_doy + 1
-dat$year_adjusted = dat$YearCollected - dat$min_year + 1
+dat$doy_adjusted = dat$doy - min(dat$doy) + 1
+dat$year_adjusted = dat$YearCollected - min(dat$YearCollected) + 1
+dat = subset(dat, !is.na(ObservationCount))
 
 jags.data = list(daily.count = dat$ObservationCount,
                  nobs = nrow(dat),
@@ -217,6 +383,8 @@ jags.data = list(daily.count = dat$ObservationCount,
                  nyear = max(dat$year_adjusted),
                  
                  upper_limit = max(aggregate(ObservationCount~year_adjusted + area, data = dat, FUN = sum)$ObservationCount)*5,
+                 
+                 log.offset = log(dat$net.hrs),
                  pi = pi
 )
 
@@ -234,7 +402,6 @@ out <- jags(data = jags.data,
                                    
                                    "N.total",
                                    "N",
-                                   "expected",
                                    "lam"
                                    
                                    
@@ -248,16 +415,18 @@ out <- jags(data = jags.data,
 max(unlist(out$Rhat),na.rm = TRUE)
 mean(unlist(out$Rhat) > 1.10,na.rm = TRUE)
 
+#******************************************************************************************************************************************
+#******************************************************************************************************************************************
+# PART 4: SUMMARIZE RESULTS
+#******************************************************************************************************************************************
+#******************************************************************************************************************************************
 
-#-----------------------------------------------------------------------
 # Annual indices
-#-----------------------------------------------------------------------
-
 N.area = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.500)), varnames = c("area","year"), value.name = "index.500")
 N.area$index.025 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.025)), varnames = c("area","year"), value.name = "index.025")$index.025
 N.area$index.975 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.975)), varnames = c("area","year"), value.name = "index.975")$index.975
 
-N.total = data.frame(area = "total",
+N.overall = data.frame(area = "Overall",
                      year = 1:jags.data$nyear,
                      index.500 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.500)),
                      index.025 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.025)),
@@ -265,13 +434,63 @@ N.total = data.frame(area = "total",
 
 N.area$area = factor(N.area$area)
 
-N.total = rbind(N.total,N.area)
-N.total$year = N.total$year + dat$min_year[1] - 1
+N.overall = rbind(N.overall,N.area)
+N.overall$year = N.overall$year + dat$min_year[1] - 1
 
-area.plot = ggplot( data = N.total ) +
+area.plot = ggplot( data = N.overall ) +
   geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975), col = factor(area)), width = 0)+
   geom_point(aes(x = year, y = log(index.500), col = factor(area)))+
   facet_grid(area~., scales = "free")+
+  ylab("Index")+
+  xlab("Year")+
+  scale_color_manual(values = RColorBrewer::brewer.pal(length(unique(N.overall$area)), "Dark2"), name = "Station/Area")+
   theme_bw()
 
 print(area.plot)
+
+overall.plot = ggplot( data = subset(N.overall, area == "Overall" & year <= 2014) ) +
+  geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975)), width = 0)+
+  geom_point(aes(x = year, y = log(index.500)))+
+  ylab("Index")+
+  xlab("Year")+
+  ggtitle(paste0(dat$station[1]," (Overall)"))+
+  theme_bw()
+
+print(overall.plot)
+
+N.sums = data.frame(year = unique(N.overall$year))
+for (y in unique(dat$year_adjusted)){
+  seasonal.sum.est = apply(out$sims.list$lam[,which(dat$year_adjusted == y)],1,sum)
+  N.sums$sum.500[y] = quantile(seasonal.sum.est, 0.5)
+  N.sums$sum.025[y] = quantile(seasonal.sum.est, 0.025)
+  N.sums$sum.975[y] = quantile(seasonal.sum.est, 0.975)
+
+}
+
+sum.plot = ggplot( data = subset(N.sums, year <= 2014) ) +
+  geom_errorbar(aes(x = year, ymin = log(sum.025), ymax = log(sum.975)), width = 0)+
+  geom_point(aes(x = year, y = log(sum.500)))+
+  ylab("Index")+
+  xlab("Year")+
+  ggtitle(paste0(dat$station[1]," (Overall)"))+
+  theme_bw()
+
+print(sum.plot)
+
+daily.plot = ggplot(data = dat)+
+  geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
+  xlab("Day of Year")+
+  ylab("Daily Estimated Total")+
+  facet_grid(area~YearCollected)+
+  theme_bw()
+print(daily.plot)
+
+annual.plot = ggplot(data = aggregate(ObservationCount~YearCollected, data = dat, FUN = sum))+
+  geom_point(aes(x = YearCollected, y = ObservationCount), col = "blue")+
+  xlab("Year")+
+  ylab("Seasonal Total")+
+  theme_bw()
+print(annual.plot)
+
+
+
