@@ -412,8 +412,8 @@ for (i in 1:nrow(station_season_combinations)){
               inits = inits,
               n.chains = 2,
               n.thin = 10,
-              n.iter = 2000,
-              n.burnin = 1000)
+              n.iter = 20000,
+              n.burnin = 10000)
   
   max(unlist(out$Rhat),na.rm = TRUE)
   mean(unlist(out$Rhat) > 1.10,na.rm = TRUE)
