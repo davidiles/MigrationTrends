@@ -180,13 +180,13 @@ dat_combined_usa$country = "USA"
 #------------------------------------------------------------------------------------------------------------------------------------------
 dat_combined = dplyr::bind_rows(dat_combined_can, dat_combined_usa)
 
-# For any sites without recorded net hours, fill in with 0.001 (doesnt change results)
-dat_combined$net.hrs[which(is.na(dat_combined$net.hrs))] = 0.001
+# For any sites without recorded net hours, fill in with 0 (doesnt change results)
+dat_combined$net.hrs[which(is.na(dat_combined$net.hrs))] = 1
 
 rm(list=setdiff(ls(), c("dat_combined")))
 
 # Limit to data collected after 1995
-dat_combined = subset(dat_combined, YearCollected >= 1995 & YearCollected <= 2015)
+dat_combined = subset(dat_combined, YearCollected >= 2006)
 
 
 #----------------------------------
@@ -358,14 +358,175 @@ cat("
     ",fill = TRUE)
 sink()
 
-#******************************************************************************************************************************************
-#******************************************************************************************************************************************
+# ******************************************************************************************************************************************
+# ******************************************************************************************************************************************
 # PART 3: RUN ANALYSIS
-#******************************************************************************************************************************************
-#******************************************************************************************************************************************
+# ******************************************************************************************************************************************
+# ******************************************************************************************************************************************
 
 station_season_combinations = unique(dat_combined[,c("station","season")])
 
+for (i in 1:nrow(station_season_combinations)){
+
+  dat = subset(dat_combined, station == station_season_combinations$station[i] & season == station_season_combinations$season[i])
+
+  dat$doy_adjusted = dat$doy - min(dat$doy) + 1
+  dat$year_adjusted = dat$YearCollected - min(dat$YearCollected) + 1
+  dat = subset(dat, !is.na(ObservationCount))
+
+  jags.data = list(daily.count = dat$ObservationCount,
+                   nobs = nrow(dat),
+
+                   area = dat$area,
+                   narea = max(dat$area),
+
+                   day = dat$doy_adjusted,
+                   nday = max(dat$doy_adjusted),
+
+                   year = dat$year_adjusted,
+                   nyear = max(dat$year_adjusted),
+
+                   upper_limit = max(aggregate(ObservationCount~year_adjusted + area, data = dat, FUN = sum)$ObservationCount)*5,
+
+                   log.offset = log(dat$net.hrs),
+                   pi = pi
+  )
+
+  inits <- function() list(intercept = runif(jags.data$narea,0,100))
+  out <- jags(data = jags.data,
+              model.file = "cmmn_separate.jags",
+              parameters.to.save = c(
+                "log.trend",
+                "proc.sd",
+
+                "log.intercept",
+                "daily.noise.sd",
+                "mean.migrate",
+                "sd.migrate",
+
+                "expected.count",
+                "N.total",
+                "N"
+
+
+              ),
+              inits = inits,
+              n.chains = 2,
+              n.thin = 10,
+              n.iter = 20000,
+              n.burnin = 10000)
+
+  max(unlist(out$Rhat),na.rm = TRUE)
+  mean(unlist(out$Rhat) > 1.10,na.rm = TRUE)
+
+  save(out, file = paste0("./jags_output/",station_season_combinations$station[i],"_",station_season_combinations$season[i],".RData"))
+
+  #******************************************************************************************************************************************
+  #******************************************************************************************************************************************
+  # PART 4: SUMMARIZE RESULTS
+  #******************************************************************************************************************************************
+  #******************************************************************************************************************************************
+
+  # Annual indices
+  N.area = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.500)), varnames = c("area","year"), value.name = "index.500")
+  N.area$index.025 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.025)), varnames = c("area","year"), value.name = "index.025")$index.025
+  N.area$index.975 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.975)), varnames = c("area","year"), value.name = "index.975")$index.975
+
+  N.overall = data.frame(area = "Overall",
+                         year = 1:jags.data$nyear,
+                         index.500 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.500)),
+                         index.025 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.025)),
+                         index.975 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.975)))
+
+  N.area$area = factor(N.area$area)
+
+  N.overall = rbind(N.overall,N.area)
+  N.overall$year = N.overall$year + min(dat$YearCollected) - 1
+
+  # area.plot = ggplot( data = N.overall ) +
+  #   geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975), col = factor(area)), width = 0)+
+  #   geom_point(aes(x = year, y = log(index.500), col = factor(area)))+
+  #   facet_grid(area~., scales = "free")+
+  #   ylab("Index")+
+  #   xlab("Year")+
+  #   scale_color_manual(values = RColorBrewer::brewer.pal(length(unique(N.overall$area)), "Dark2"), name = "Station/Area")+
+  #   theme_bw()
+  #
+  # print(area.plot)
+  #
+  overall.plot = ggplot( data = subset(N.overall, area == "Overall" & year <= 2014) ) +
+    geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975)), width = 0)+
+    geom_point(aes(x = year, y = log(index.500)))+
+    ylab("Index")+
+    xlab("Year")+
+    ggtitle(paste0(dat$station[1]," (Overall)"))+
+    theme_bw()
+
+  print(overall.plot)
+
+  #----------------------------------------------
+  # Overlay observed counts on expected counts
+  #----------------------------------------------
+  
+  daily.est.500 = melt(apply(out$sims.list$expected.count, c(2,3,4), FUN = function(x) quantile(x, 0.5)),
+                   value.name = "expected.500", varnames = c("area","doy_adjusted","year"))
+  daily.est.025 = melt(apply(out$sims.list$expected.count, c(2,3,4), FUN = function(x) quantile(x, 0.025)),
+                       value.name = "expected.025", varnames = c("area","doy_adjusted","year"))
+  daily.est.975 = melt(apply(out$sims.list$expected.count, c(2,3,4), FUN = function(x) quantile(x, 0.975)),
+                       value.name = "expected.975", varnames = c("area","doy_adjusted","year"))
+  
+  daily.est = merge(merge(daily.est.500,daily.est.025), daily.est.975)
+  daily.est$doy = daily.est$doy_adjusted + min(dat$doy) - 1
+  daily.est$YearCollected = daily.est$year + min(dat$YearCollected) - 1 
+  
+  daily.plot = ggplot(data = subset(daily.est, YearCollected >= 2015))+
+    geom_line(aes(x = doy, y = expected.500), col = "black")+
+    geom_ribbon(aes(x = doy, ymin = expected.025, ymax = expected.975), alpha = 0.3)+
+    
+    #geom_point(data = subset(dat, YearCollected >= 2015), aes(x = doy, y = ObservationCount), col = "blue", alpha = 0.3)+
+    xlab("Day of Year")+
+    ylab("Daily Estimated Total")+
+    ggtitle(dat$station[1])+
+    facet_grid(.~YearCollected, scales = "free")+
+    theme_bw()+
+    theme(axis.text.x = element_text(size = 5))
+  print(daily.plot)
+
+  # Compare expected and actual seasonal totals
+  
+  dat$year_doy = paste(dat$YearCollected,dat$doy, sep="_")
+  daily.est$year_doy = paste(daily.est$YearCollected,daily.est$doy,sep="_")
+  daily.est.subset = subset(daily.est, year_doy %in% dat$year_doy)
+  
+  seasonal.total.obs = aggregate(ObservationCount ~ YearCollected, data = dat, FUN = sum)
+  seasonal.total.exp = aggregate(expected.500 ~ YearCollected, data = daily.est.subset, FUN = sum)
+  seasonal.total = merge(seasonal.total.obs,seasonal.total.exp)
+  
+  obs_vs_exp = ggplot(data = seasonal.total)+
+    stat_smooth(aes(x = log(expected.500), y = log(ObservationCount)), method = "lm", alpha = 0.2, fill = "dodgerblue")+
+    geom_point(aes(x = log(expected.500), y = log(ObservationCount)), col = "blue")+
+    xlab("log(Expected Seasonal Total)")+
+    ylab("log(Observed Seasonal Total)")+
+    ggtitle(dat$station[1])+
+    theme_bw()
+  print(obs_vs_exp)
+  
+  summary(lm(log(ObservationCount) ~ log(expected.500), data = seasonal.total))
+  
+   }
+
+
+
+#******************************************************************************************************************************************
+#******************************************************************************************************************************************
+# PART 5: PLOT RESULTS
+#******************************************************************************************************************************************
+#******************************************************************************************************************************************
+rm(list=setdiff(ls(), c("dat_combined")))
+
+station_season_combinations = unique(dat_combined[,c("station","season")])
+
+results_summary = data.frame()
 for (i in 1:nrow(station_season_combinations)){
   
   dat = subset(dat_combined, station == station_season_combinations$station[i] & season == station_season_combinations$season[i])
@@ -389,113 +550,126 @@ for (i in 1:nrow(station_season_combinations)){
                    upper_limit = max(aggregate(ObservationCount~year_adjusted + area, data = dat, FUN = sum)$ObservationCount)*5,
                    
                    log.offset = log(dat$net.hrs),
-                   pi = pi
-  )
+                   pi = pi)
   
-  inits <- function() list(intercept = runif(jags.data$narea,0,100))
-  out <- jags(data = jags.data,
-              model.file = "cmmn_separate.jags",
-              parameters.to.save = c(
-                "log.trend",
-                "proc.sd",
-                
-                "log.intercept",
-                "daily.noise.sd",
-                "mean.migrate",
-                "sd.migrate",
-                
-                "N.total",
-                "N"
-                
-                
-              ),
-              inits = inits,
-              n.chains = 2,
-              n.thin = 10,
-              n.iter = 20000,
-              n.burnin = 10000)
+  load(file = paste0("./jags_output/",station_season_combinations$station[i],"_",station_season_combinations$season[i],".RData"))
   
-  max(unlist(out$Rhat),na.rm = TRUE)
-  mean(unlist(out$Rhat) > 1.10,na.rm = TRUE)
+  derived.trend = (log(out$sims.list$N.total[,ncol(out$sims.list$N.total)]) - log(out$sims.list$N.total[,1])) / (ncol(out$sims.list$N.total)-1)
   
-  save(out, file = paste0("./jags_output/",station_season_combinations$station[i],"_",station_season_combinations$season[i],".RData"))
-  #******************************************************************************************************************************************
-  #******************************************************************************************************************************************
-  # PART 4: SUMMARIZE RESULTS
-  #******************************************************************************************************************************************
-  #******************************************************************************************************************************************
+  N_annual_station = data.frame(station = dat$station[1],
+                                season = dat$season[1],
+                                year = (1:jags.data$nyear) + min(dat$YearCollected) - 1,
+                                
+                                index.500 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.500)),
+                                index.025 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.025)),
+                                index.975 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.975)),
+                                
+                                index.500.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.500)),
+                                index.025.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.025)),
+                                index.975.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.975)),
+                                
+                                
+                                derived.trend.500 = quantile(derived.trend,0.5),
+                                derived.trend.025 = quantile(derived.trend,0.025),
+                                derived.trend.975 = quantile(derived.trend,0.975),
+                                
+                                mean.trend.500 = quantile(out$sims.list$log.trend,0.5),
+                                mean.trend.025 = quantile(out$sims.list$log.trend,0.025),
+                                mean.trend.975 = quantile(out$sims.list$log.trend,0.975),
+                                
+                                n.chains = out$mcmc.info$n.chains,
+                                n.samples = out$mcmc.info$n.samples,
+                                max.Rhat = max(unlist(out$Rhat),na.rm=TRUE),
+                                Rhat.1.1 = mean(unlist(out$Rhat)>1.1,na.rm=TRUE))
   
-  # Annual indices
-  N.area = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.500)), varnames = c("area","year"), value.name = "index.500")
-  N.area$index.025 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.025)), varnames = c("area","year"), value.name = "index.025")$index.025
-  N.area$index.975 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.975)), varnames = c("area","year"), value.name = "index.975")$index.975
+  results_summary = rbind(results_summary, N_annual_station)
   
-  N.overall = data.frame(area = "Overall",
-                         year = 1:jags.data$nyear,
-                         index.500 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.500)),
-                         index.025 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.025)),
-                         index.975 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.975)))
-  
-  N.area$area = factor(N.area$area)
-  
-  N.overall = rbind(N.overall,N.area)
-  N.overall$year = N.overall$year + dat$min_year[1] - 1
-  
-  # area.plot = ggplot( data = N.overall ) +
-  #   geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975), col = factor(area)), width = 0)+
-  #   geom_point(aes(x = year, y = log(index.500), col = factor(area)))+
-  #   facet_grid(area~., scales = "free")+
-  #   ylab("Index")+
-  #   xlab("Year")+
-  #   scale_color_manual(values = RColorBrewer::brewer.pal(length(unique(N.overall$area)), "Dark2"), name = "Station/Area")+
-  #   theme_bw()
-  # 
-  # print(area.plot)
-  # 
-  overall.plot = ggplot( data = subset(N.overall, area == "Overall" & year <= 2014) ) +
-    geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975)), width = 0)+
-    geom_point(aes(x = year, y = log(index.500)))+
-    ylab("Index")+
-    xlab("Year")+
-    ggtitle(paste0(dat$station[1]," (Overall)"))+
-    theme_bw()
-  
-  print(overall.plot)
-  
-  # N.sums = data.frame(year = unique(N.overall$year))
-  # for (y in unique(dat$year_adjusted)){
-  #   seasonal.sum.est = apply(out$sims.list$lam[,which(dat$year_adjusted == y)],1,sum)
-  #   N.sums$sum.500[y] = quantile(seasonal.sum.est, 0.5)
-  #   N.sums$sum.025[y] = quantile(seasonal.sum.est, 0.025)
-  #   N.sums$sum.975[y] = quantile(seasonal.sum.est, 0.975)
-  #   
-  # }
-  # 
-  # sum.plot = ggplot( data = subset(N.sums, year <= 2014) ) +
-  #   geom_errorbar(aes(x = year, ymin = log(sum.025), ymax = log(sum.975)), width = 0)+
-  #   geom_point(aes(x = year, y = log(sum.500)))+
-  #   ylab("Index")+
-  #   xlab("Year")+
-  #   ggtitle(paste0(dat$station[1]," (Overall)"))+
-  #   theme_bw()
-  # 
-  # print(sum.plot)
-  # 
-  # daily.plot = ggplot(data = dat)+
-  #   geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
-  #   xlab("Day of Year")+
-  #   ylab("Daily Estimated Total")+
-  #   facet_grid(area~YearCollected)+
-  #   theme_bw()
-  # print(daily.plot)
-  # 
-  # annual.plot = ggplot(data = aggregate(ObservationCount~YearCollected, data = dat, FUN = sum))+
-  #   geom_point(aes(x = YearCollected, y = ObservationCount), col = "blue")+
-  #   xlab("Year")+
-  #   ylab("Seasonal Total")+
-  #   theme_bw()
-  # print(annual.plot)
 }
 
+head(results_summary)
+
+#----------------------
+# Summarized results
+#----------------------
 
 
+results.fall = ggplot( data = subset(results_summary, season == "Fall" ) ) +
+  #geom_hline(yintercept = 0, linetype = 1, col = "gray85", size = 2)+
+  #geom_hline(yintercept = log(c(1/5,5)), linetype = 1, col = "gray85", size = 1)+
+  
+  geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975)), width = 0, col = "red")+
+  geom_point(aes(x = year, y = log(index.500)), col = "red")+
+  ylab("Population index")+
+  xlab("Year")+
+  facet_grid(station~season, scales = "free")+
+  
+  scale_color_manual(values = c("red","blue"))+
+  #scale_y_continuous(breaks = log( c(1/5 , 1,  5)),
+  #                   labels = c("5-fold decrease", "no change", "5-fold increase"),
+   #                  minor_breaks = NULL)+
+  
+  #coord_cartesian(ylim = log( c(1/16 , 1,  16)))+
+  theme_bw()
+
+results.fall
+
+
+results.spring = ggplot( data = subset(results_summary, season == "Spring" ) ) +
+  #geom_hline(yintercept = 0, linetype = 1, col = "gray85", size = 2)+
+  #geom_hline(yintercept = log(c(1/5,5)), linetype = 1, col = "gray85", size = 1)+
+  
+  geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975)), width = 0, col = "blue")+
+  geom_point(aes(x = year, y = log(index.500)), col = "blue")+
+  ylab("Population index")+
+  xlab("Year")+
+  facet_grid(station~season, scales = "free")+
+  
+  #scale_y_continuous(breaks = log( c(1/5 , 1,  5)),
+  #                   labels = c("5-fold decrease", "no change", "5-fold increase"),
+  #                  minor_breaks = NULL)+
+  
+  #coord_cartesian(ylim = log( c(1/16 , 1,  16)))+
+  theme_bw()
+
+results.spring
+
+
+scaled.results = ggplot( data = subset(results_summary, year > 2006) ) +
+  geom_hline(yintercept = 0, linetype = 1, col = "gray85", size = 2)+
+  geom_hline(yintercept = log(c(1/5,5)), linetype = 1, col = "gray85", size = 1)+
+  
+  geom_errorbar(aes(x = year, ymin = log(index.025.rescaled), ymax = log(index.975.rescaled), col = season), width = 0)+
+  geom_point(aes(x = year, y = log(index.500.rescaled), col = season))+
+  ylab("Population change relative to 2006")+
+  xlab("Year")+
+  facet_grid(station~season)+
+  
+  scale_color_manual(values = c("red","blue"))+
+  scale_y_continuous(breaks = log( c(1/5 , 1,  5)),
+                     labels = c("5-fold decrease", "no change", "5-fold increase"),
+                     minor_breaks = NULL)+
+  
+  coord_cartesian(ylim = log( c(1/16 , 1,  16)))+
+  theme_bw()
+
+scaled.results
+
+# Log trends
+trend.df = unique(results_summary[,c("station","season",
+                                     "mean.trend.025","mean.trend.500","mean.trend.975",
+                                     "derived.trend.025","derived.trend.500","derived.trend.975")])
+
+trend.results = ggplot( data = trend.df) +
+  
+  geom_errorbarh(aes(y = station, xmin = mean.trend.025, xmax = mean.trend.975, col = season), height = 0)+
+  geom_point(aes(y = station, x = mean.trend.500, col = season))+
+  ylab("Station")+
+  xlab("Year")+
+  facet_grid(.~season)+
+  coord_cartesian(xlim=c(-0.5,0.5))+
+  geom_vline(xintercept = 0, linetype = 2)+
+  scale_color_manual(values = c("red","blue"))+
+  theme_bw()
+
+print(trend.results)
+trend.results
