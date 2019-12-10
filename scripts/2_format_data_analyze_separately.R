@@ -490,7 +490,7 @@ sink()
 
 station_season_combinations = unique(dat_combined[,c("station","season")])
 
-for (i in 1:nrow(station_season_combinations)){
+for (i in (1:nrow(station_season_combinations))){
 
   dat = subset(dat_combined, station == station_season_combinations$station[i] & season == station_season_combinations$season[i])
 
@@ -525,6 +525,9 @@ for (i in 1:nrow(station_season_combinations)){
 
                 "log.intercept",
                 "daily.noise.sd",
+                "mean.migrate.HYPERMEAN",
+                "mean.migrate.HYPERSD",
+                
                 "mean.migrate",
                 "sd.migrate",
 
@@ -538,8 +541,8 @@ for (i in 1:nrow(station_season_combinations)){
               inits = inits,
               n.chains = 2,
               n.thin = 10,
-              n.iter = 50000,
-              n.burnin = 30000)
+              n.iter = 20000,
+              n.burnin = 10000)
 
   max(unlist(out$Rhat),na.rm = TRUE)
   mean(unlist(out$Rhat) > 1.10,na.rm = TRUE)
@@ -639,8 +642,6 @@ for (i in 1:nrow(station_season_combinations)){
   summary(lm(log(ObservationCount) ~ log(expected.500), data = seasonal.total))
   
    }
-
-
 
 #******************************************************************************************************************************************
 #******************************************************************************************************************************************
