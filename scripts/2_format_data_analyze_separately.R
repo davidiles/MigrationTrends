@@ -693,7 +693,9 @@ for (i in 1:nrow(station_season_combinations)){
                    log.offset = log(dat$net.hrs),
                    pi = pi)
   
-  load(file = paste0("./jags_output/",station_season_combinations$station[i],"_",station_season_combinations$season[i],".RData"))
+  file = paste0("./jags_output/",station_season_combinations$station[i],"_",station_season_combinations$season[i],"_randompeak.RData")
+  if (file.exists(file)){
+  load(file = file)
   
   derived.trend = (log(out$sims.list$N.total[,ncol(out$sims.list$N.total)]) - log(out$sims.list$N.total[,1])) / (ncol(out$sims.list$N.total)-1)
   
@@ -724,6 +726,7 @@ for (i in 1:nrow(station_season_combinations)){
                                 Rhat.1.1 = mean(unlist(out$Rhat)>1.1,na.rm=TRUE))
   
   results_summary = rbind(results_summary, N_annual_station)
+  }
   
 }
 
