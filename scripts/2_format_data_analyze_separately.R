@@ -732,6 +732,7 @@ for (i in 1:nrow(station_season_combinations)){
 
 head(results_summary)
 
+aggregate(max.Rhat ~ station + season, data = results_summary, FUN = mean)
 #----------------------
 # Summarized results
 #----------------------
@@ -788,7 +789,7 @@ scaled.results = ggplot( data = subset(results_summary, year > 2006) ) +
   xlab("Year")+
   facet_grid(station~season)+
   
-  scale_color_manual(values = c("red","blue"))+
+  scale_color_manual(values = c("blue","red"))+
   scale_y_continuous(breaks = log( c(1/5 , 1,  5)),
                      labels = c("5-fold decrease", "no change", "5-fold increase"),
                      minor_breaks = NULL)+
@@ -812,7 +813,7 @@ trend.results = ggplot( data = trend.df) +
   facet_grid(.~season)+
   coord_cartesian(xlim=c(-0.5,0.5))+
   geom_vline(xintercept = 0, linetype = 2)+
-  scale_color_manual(values = c("red","blue"))+
+  scale_color_manual(values = c("blue","red"))+
   theme_bw()
 
 print(trend.results)
