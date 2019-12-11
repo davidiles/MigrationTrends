@@ -200,49 +200,49 @@ dat_combined = subset(dat_combined, YearCollected >= 2006)
 # Plots of daily counts
 #----------------------------------
 
-# CAN Spring
-CAN_Spring_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Spring")) +
-  geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
-  facet_grid(station~YearCollected, scales = "free_y")+
-  xlab("Day of Year")+
-  ylab("Count")+
-  theme_bw()
-pdf(file = paste0(file = "../figures/CAN_Spring_plot.pdf"), width = 30,height=6)
-print(CAN_Spring_plot )
-dev.off()
-
-# CAN Fall
-CAN_Fall_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Fall")) +
-  geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
-  facet_grid(station~YearCollected, scales = "free_y")+
-  xlab("Day of Year")+
-  ylab("Count")+
-  theme_bw()
-pdf(file = paste0(file = "../figures/CAN_Fall_plot.pdf"), width = 30,height=6)
-print(CAN_Fall_plot )
-dev.off()
-
-# USA Spring
-USA_Spring_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Spring")) +
-  geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
-  facet_grid(station~YearCollected, scales = "free_y")+
-  xlab("Day of Year")+
-  ylab("Count(N/100 net hours)")+
-  theme_bw()
-pdf(file = paste0(file = "../figures/USA_Spring_plot.pdf"), width = 30,height=6)
-print(USA_Spring_plot )
-dev.off()
-
-# USA Fall
-USA_Fall_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Fall")) +
-  geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
-  facet_grid(station~YearCollected, scales = "free_y")+
-  xlab("Day of Year")+
-  ylab("Count(N/100 net hours)")+
-  theme_bw()
-pdf(file = paste0(file = "../figures/USA_Fall_plot.pdf"), width = 30,height=6)
-print(USA_Fall_plot )
-dev.off()
+# # CAN Spring
+# CAN_Spring_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Spring")) +
+#   geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
+#   facet_grid(station~YearCollected, scales = "free_y")+
+#   xlab("Day of Year")+
+#   ylab("Count")+
+#   theme_bw()
+# pdf(file = paste0(file = "../figures/CAN_Spring_plot.pdf"), width = 30,height=6)
+# print(CAN_Spring_plot )
+# dev.off()
+#
+# # CAN Fall
+# CAN_Fall_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Fall")) +
+#   geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
+#   facet_grid(station~YearCollected, scales = "free_y")+
+#   xlab("Day of Year")+
+#   ylab("Count")+
+#   theme_bw()
+# pdf(file = paste0(file = "../figures/CAN_Fall_plot.pdf"), width = 30,height=6)
+# print(CAN_Fall_plot )
+# dev.off()
+# 
+# # USA Spring
+# USA_Spring_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Spring")) +
+#   geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
+#   facet_grid(station~YearCollected, scales = "free_y")+
+#   xlab("Day of Year")+
+#   ylab("Count(N/100 net hours)")+
+#   theme_bw()
+# pdf(file = paste0(file = "../figures/USA_Spring_plot.pdf"), width = 30,height=6)
+# print(USA_Spring_plot )
+# dev.off()
+# 
+# # USA Fall
+# USA_Fall_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Fall")) +
+#   geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
+#   facet_grid(station~YearCollected, scales = "free_y")+
+#   xlab("Day of Year")+
+#   ylab("Count(N/100 net hours)")+
+#   theme_bw()
+# pdf(file = paste0(file = "../figures/USA_Fall_plot.pdf"), width = 30,height=6)
+# print(USA_Fall_plot )
+# dev.off()
 
 #******************************************************************************************************************************************
 #******************************************************************************************************************************************
@@ -447,39 +447,39 @@ cat("
       }
       
       
-      # #---------------------------------------------
-      # # Goodness-of-fit
-      # #---------------------------------------------
-      # for (i in 1:nobs){
-      #   
-      #   #-----------------------------------------------
-      #   # Assess fit at level 1 (deviations from lambda)
-      #   #-----------------------------------------------
-      #   sim.count.1[i] ~ dpois(lam[i])
-      #   
-      #   sqerror.obs.1[i] <- pow(daily.count[i] - lam[i], 2)
-      #   sqerror.sim.1[i] <- pow(sim.count.1[i] - lam[i], 2)
-      #   
-      #   X2.obs.1[i]      <- sqerror.obs.1[i]/lam[i]
-      #   X2.sim.1[i]      <- sqerror.sim.1[i]/lam[i]
-      #   
-      #   #-----------------------------------------------
-      #   # Assess fit at level 2 (deviations from expected)
-      #   #-----------------------------------------------
-      #   sim.noise[i] ~ dnorm(0,daily.noise.tau)
-      #   sim.count.2[i] ~ dpois(exp(log(expected[i]) + sim.noise[i]))
-      #   
-      #   sqerror.obs.2[i] <- pow(daily.count[i] - expected[i], 2)
-      #   sqerror.sim.2[i] <- pow(sim.count.2[i] - expected[i], 2)
-      #   
-      #   X2.obs.2[i]      <- sqerror.obs.2[i]/expected[i]
-      #   X2.sim.2[i]      <- sqerror.sim.2[i]/expected[i]
-      #   
-      # }
-      # 
-      # chi2.obs.1 <- sum(X2.obs.1[])
-      # chi2.sim.1 <- sum(X2.sim.1[])
-      # 
+      #---------------------------------------------
+      # Goodness-of-fit
+      #---------------------------------------------
+      for (i in 1:nobs){
+
+        #-----------------------------------------------
+        # Assess fit at level 1 (deviations from lambda)
+        #-----------------------------------------------
+        sim.count.1[i] ~ dpois(lam[i])
+
+        sqerror.obs.1[i] <- pow(daily.count[i] - lam[i], 2)
+        sqerror.sim.1[i] <- pow(sim.count.1[i] - lam[i], 2)
+
+        X2.obs.1[i]      <- sqerror.obs.1[i]/lam[i]
+        X2.sim.1[i]      <- sqerror.sim.1[i]/lam[i]
+
+        # #-----------------------------------------------
+        # # Assess fit at level 2 (deviations from expected)
+        # #-----------------------------------------------
+        # sim.noise[i] ~ dnorm(0,daily.noise.tau)
+        # sim.count.2[i] ~ dpois(exp(log(expected[i]) + sim.noise[i]))
+        # 
+        # sqerror.obs.2[i] <- pow(daily.count[i] - expected[i], 2)
+        # sqerror.sim.2[i] <- pow(sim.count.2[i] - expected[i], 2)
+        # 
+        # X2.obs.2[i]      <- sqerror.obs.2[i]/expected[i]
+        # X2.sim.2[i]      <- sqerror.sim.2[i]/expected[i]
+
+      }
+
+      chi2.obs.1 <- sum(X2.obs.1[])
+      chi2.sim.1 <- sum(X2.sim.1[])
+
       # chi2.obs.2 <- sum(X2.obs.2[])
       # chi2.sim.2 <- sum(X2.sim.2[])
       
@@ -553,9 +553,9 @@ allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list,
               ),
               inits = inits,
               n.chains = 2,
-              n.thin = 10,
-              n.iter = 30000,
-              n.burnin = 20000)
+              n.thin = 50,
+              n.iter = 200000,
+              n.burnin = 100000)
   
   max(unlist(out$Rhat),na.rm = TRUE)
   mean(unlist(out$Rhat) > 1.10,na.rm = TRUE)
