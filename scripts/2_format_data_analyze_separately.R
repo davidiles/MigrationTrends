@@ -195,7 +195,6 @@ rm(list=setdiff(ls(), c("dat_combined")))
 # Limit to data collected after 1995
 dat_combined = subset(dat_combined, YearCollected >= 2006)
 
-
 #----------------------------------
 # Plots of daily counts
 #----------------------------------
