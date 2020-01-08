@@ -187,61 +187,63 @@ dat_combined_usa$country = "USA"
 #------------------------------------------------------------------------------------------------------------------------------------------
 dat_combined = dplyr::bind_rows(dat_combined_can, dat_combined_usa)
 
-# For any sites without recorded net hours, fill in with 0 (doesnt change results)
-dat_combined$net.hrs[which(is.na(dat_combined$net.hrs))] = 1
+#----------
+# For any sites without recorded net hours, fill in with median
+dat_combined$net.hrs[which(is.na(dat_combined$net.hrs))] = median(dat_combined$net.hrs, na.rm = TRUE)
+#----------
 
 rm(list=setdiff(ls(), c("dat_combined")))
 
-# Limit to data collected after 1995
+# Limit to data collected after 2005
 dat_combined = subset(dat_combined, YearCollected >= 2006)
 
 #----------------------------------
 # Plots of daily counts
 #----------------------------------
 
-# # CAN Spring
-# CAN_Spring_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Spring")) +
-#   geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
-#   facet_grid(station~YearCollected, scales = "free_y")+
-#   xlab("Day of Year")+
-#   ylab("Count")+
-#   theme_bw()
-# pdf(file = paste0(file = "../figures/CAN_Spring_plot.pdf"), width = 30,height=6)
-# print(CAN_Spring_plot )
-# dev.off()
-#
-# # CAN Fall
-# CAN_Fall_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Fall")) +
-#   geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
-#   facet_grid(station~YearCollected, scales = "free_y")+
-#   xlab("Day of Year")+
-#   ylab("Count")+
-#   theme_bw()
-# pdf(file = paste0(file = "../figures/CAN_Fall_plot.pdf"), width = 30,height=6)
-# print(CAN_Fall_plot )
-# dev.off()
-# 
-# # USA Spring
-# USA_Spring_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Spring")) +
-#   geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
-#   facet_grid(station~YearCollected, scales = "free_y")+
-#   xlab("Day of Year")+
-#   ylab("Count(N/100 net hours)")+
-#   theme_bw()
-# pdf(file = paste0(file = "../figures/USA_Spring_plot.pdf"), width = 30,height=6)
-# print(USA_Spring_plot )
-# dev.off()
-# 
-# # USA Fall
-# USA_Fall_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Fall")) +
-#   geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
-#   facet_grid(station~YearCollected, scales = "free_y")+
-#   xlab("Day of Year")+
-#   ylab("Count(N/100 net hours)")+
-#   theme_bw()
-# pdf(file = paste0(file = "../figures/USA_Fall_plot.pdf"), width = 30,height=6)
-# print(USA_Fall_plot )
-# dev.off()
+# CAN Spring
+CAN_Spring_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Spring")) +
+  geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
+  facet_grid(station~YearCollected, scales = "free_y")+
+  xlab("Day of Year")+
+  ylab("Count")+
+  theme_bw()
+pdf(file = paste0(file = "../figures/CAN_Spring_plot.pdf"), width = 30,height=6)
+print(CAN_Spring_plot )
+dev.off()
+
+# CAN Fall
+CAN_Fall_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Fall")) +
+  geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
+  facet_grid(station~YearCollected, scales = "free_y")+
+  xlab("Day of Year")+
+  ylab("Count")+
+  theme_bw()
+pdf(file = paste0(file = "../figures/CAN_Fall_plot.pdf"), width = 30,height=6)
+print(CAN_Fall_plot )
+dev.off()
+
+# USA Spring
+USA_Spring_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Spring")) +
+  geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
+  facet_grid(station~YearCollected, scales = "free_y")+
+  xlab("Day of Year")+
+  ylab("Count(N/100 net hours)")+
+  theme_bw()
+pdf(file = paste0(file = "../figures/USA_Spring_plot.pdf"), width = 30,height=6)
+print(USA_Spring_plot )
+dev.off()
+
+# USA Fall
+USA_Fall_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Fall")) +
+  geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
+  facet_grid(station~YearCollected, scales = "free_y")+
+  xlab("Day of Year")+
+  ylab("Count(N/100 net hours)")+
+  theme_bw()
+pdf(file = paste0(file = "../figures/USA_Fall_plot.pdf"), width = 30,height=6)
+print(USA_Fall_plot )
+dev.off()
 
 #******************************************************************************************************************************************
 #******************************************************************************************************************************************
@@ -253,120 +255,8 @@ dat_combined = subset(dat_combined, YearCollected >= 2006)
 # Bayesian analysis (separate for each station)
 #---------------------------------------------------------------------------------------------
 
-sink("cmmn_separate.jags")
-cat("
-    
-    model {
-      
-      #---------------------------------------------
-      # Model for population dynamics
-      #---------------------------------------------
+# Model with random effects for annual phenology
 
-      # Shared trend and annual noise
-      log.trend ~ dnorm(0,1)
-      proc.sd ~ dunif(0,2)
-      proc.tau <- pow(proc.sd,-2)
-      
-      # Separate intercepts for each sub-area within a station
-      for (A in 1:narea){
-        intercept[A] ~ dunif(0,upper_limit*5)
-        log.intercept[A] <- log(intercept[A])
-        
-        for (y in 1:nyear){
-        
-          mu[A,y] <- log.intercept[A] + log.trend*(y-1)
-          logN[A,y] <- mu[A,y] + noise[A,y]
-          noise[A,y] ~ dnorm(0,proc.tau)
-          N[A,y] <- exp(logN[A,y])
-        
-        } # close year loop
-      }
-      
-      for (y in 1:nyear){
-        N.total[y] <- sum(N[,y])
-      }
-      
-      
-      #---------------------------------------------
-      # Model for daily counts
-      #---------------------------------------------
-
-      for (A in 1:narea){
-        daily.noise.sd[A] ~ dunif(0,2)
-        daily.noise.tau[A] <- pow(daily.noise.sd[A],-2)
-        
-        mean.migrate[A] ~ dunif(1,nday)
-        sd.migrate[A] ~ dunif(0,nday)
-          
-        for (y in 1:nyear){
-            for (d in 1:nday){
-              
-              norm.density[A,d,y] <- 1/(sqrt(2*pi)*sd.migrate[A])*exp(-((d-mean.migrate[A])^2/(2*sd.migrate[A]^2)))
-              
-              # Expected count on each day
-              expected.count[A,d,y] <- norm.density[A,d,y] * N[A,y]
-              
-              # Daily observation error
-              daily.noise[A,d,y] ~ dnorm(0,daily.noise.tau[A])
-              
-              log.lambda[A,d,y] <- log(expected.count[A,d,y]) + daily.noise[A,d,y]
-              
-            } # close day loop
-            
-          } # close year loop
-      
-      } # close area loop
-      
-      for (i in 1:nobs){
-        log.lam[i] <- log.lambda[area[i],day[i],year[i]] + log.offset[i]
-        lam[i] <- exp(log.lam[i])
-        daily.count[i] ~ dpois(lam[i])
-      }
-      
-      
-      # #---------------------------------------------
-      # # Goodness-of-fit
-      # #---------------------------------------------
-      # for (i in 1:nobs){
-      #   
-      #   #-----------------------------------------------
-      #   # Assess fit at level 1 (deviations from lambda)
-      #   #-----------------------------------------------
-      #   sim.count.1[i] ~ dpois(lam[i])
-      #   
-      #   sqerror.obs.1[i] <- pow(daily.count[i] - lam[i], 2)
-      #   sqerror.sim.1[i] <- pow(sim.count.1[i] - lam[i], 2)
-      #   
-      #   X2.obs.1[i]      <- sqerror.obs.1[i]/lam[i]
-      #   X2.sim.1[i]      <- sqerror.sim.1[i]/lam[i]
-      #   
-      #   #-----------------------------------------------
-      #   # Assess fit at level 2 (deviations from expected)
-      #   #-----------------------------------------------
-      #   sim.noise[i] ~ dnorm(0,daily.noise.tau)
-      #   sim.count.2[i] ~ dpois(exp(log(expected[i]) + sim.noise[i]))
-      #   
-      #   sqerror.obs.2[i] <- pow(daily.count[i] - expected[i], 2)
-      #   sqerror.sim.2[i] <- pow(sim.count.2[i] - expected[i], 2)
-      #   
-      #   X2.obs.2[i]      <- sqerror.obs.2[i]/expected[i]
-      #   X2.sim.2[i]      <- sqerror.sim.2[i]/expected[i]
-      #   
-      # }
-      # 
-      # chi2.obs.1 <- sum(X2.obs.1[])
-      # chi2.sim.1 <- sum(X2.sim.1[])
-      # 
-      # chi2.obs.2 <- sum(X2.obs.2[])
-      # chi2.sim.2 <- sum(X2.sim.2[])
-      
-    }
-    ",fill = TRUE)
-sink()
-
-#-----------------------------------
-# Alternative model with random effects for annual phenology
-#-----------------------------------
 sink("cmmn_separate_randompeak.jags")
 cat("
     
@@ -376,14 +266,14 @@ cat("
       # Model for population dynamics
       #---------------------------------------------
 
-      # Shared trend and annual noise
+      # Trend and annual noise
       log.trend ~ dnorm(0,1)
       proc.sd ~ dunif(0,2)
       proc.tau <- pow(proc.sd,-2)
       
-      # Separate intercepts for each sub-area within a station
+      # Separate intercepts for each sub-area within a station (for stations with multiple sub-areas)
       for (A in 1:narea){
-        intercept[A] ~ dunif(0,upper_limit*5)
+        intercept[A] ~ dunif(0,upper_limit)
         log.intercept[A] <- log(intercept[A])
         
         for (y in 1:nyear){
@@ -401,31 +291,37 @@ cat("
         
       }
       
-      
       #---------------------------------------------
       # Model for daily counts
       #---------------------------------------------
 
-      for (A in 1:narea){
+      # Parameters describing the mean date of migration, and variation in that peak date among years
+      mean.migrate.HYPERMEAN ~ dunif(1,nday)
+      mean.migrate.HYPERSD ~ dunif(0,nday)
+      mean.migrate.HYPERTAU <- pow(mean.migrate.HYPERSD, -2)
       
+      # Parameter describing the width of the migration window (assume this window is constant)
+      sd.migrate ~ dunif(0,nday)
+         
+      # Magnitude of observation error can differ among sub-areas at each station
+      for (A in 1:narea){
         daily.noise.sd[A] ~ dunif(0,2)
         daily.noise.tau[A] <- pow(daily.noise.sd[A],-2)
-        
-        mean.migrate.HYPERMEAN[A] ~ dunif(1,nday)
-        mean.migrate.HYPERSD[A] ~ dunif(0,nday)
-        mean.migrate.HYPERTAU[A] <- pow(mean.migrate.HYPERSD[A], -2)
+      }
       
-        sd.migrate[A] ~ dunif(0,nday)
-          
         for (y in 1:nyear){
         
-            mean.migrate[A,y] ~ dnorm(mean.migrate.HYPERMEAN[A] , mean.migrate.HYPERTAU[A])
+        # Migration period is assumed to be the same at each sub-area within a year
+        mean.migrate[y] ~ dnorm(mean.migrate.HYPERMEAN, mean.migrate.HYPERTAU)
         
+          for (A in 1:narea){
+          
             for (d in 1:nday){
               
-              norm.density[A,d,y] <- 1/(sqrt(2*pi)*sd.migrate[A])*exp(-((d-mean.migrate[A,y])^2/(2*sd.migrate[A]^2)))
+              # Each day, at each sub-area, within each year, estimate the proportion of total annual detections.
+              norm.density[A,d,y] <- 1/(sqrt(2*pi)*sd.migrate)*exp(-((d-mean.migrate[y])^2/(2*sd.migrate^2)))
               
-              # Expected count on each day
+              # Expected count on each day (probability density * total abundance)
               expected.count[A,d,y] <- norm.density[A,d,y] * N[A,y]
               
               # Daily observation error
@@ -435,9 +331,9 @@ cat("
               
             } # close day loop
             
-          } # close year loop
+          } # close area loop
       
-      } # close area loop
+      } # close year loop 
       
       for (i in 1:nobs){
         log.lam[i] <- log.lambda[area[i],day[i],year[i]] + log.offset[i]
@@ -449,38 +345,38 @@ cat("
       #---------------------------------------------
       # Goodness-of-fit
       #---------------------------------------------
-      for (i in 1:nobs){
-
-        #-----------------------------------------------
-        # Assess fit at level 1 (deviations from lambda)
-        #-----------------------------------------------
-        sim.count.1[i] ~ dpois(lam[i])
-
-        sqerror.obs.1[i] <- pow(daily.count[i] - lam[i], 2)
-        sqerror.sim.1[i] <- pow(sim.count.1[i] - lam[i], 2)
-
-        X2.obs.1[i]      <- sqerror.obs.1[i]/lam[i]
-        X2.sim.1[i]      <- sqerror.sim.1[i]/lam[i]
-
-        # #-----------------------------------------------
-        # # Assess fit at level 2 (deviations from expected)
-        # #-----------------------------------------------
-        # sim.noise[i] ~ dnorm(0,daily.noise.tau)
-        # sim.count.2[i] ~ dpois(exp(log(expected[i]) + sim.noise[i]))
-        # 
-        # sqerror.obs.2[i] <- pow(daily.count[i] - expected[i], 2)
-        # sqerror.sim.2[i] <- pow(sim.count.2[i] - expected[i], 2)
-        # 
-        # X2.obs.2[i]      <- sqerror.obs.2[i]/expected[i]
-        # X2.sim.2[i]      <- sqerror.sim.2[i]/expected[i]
-
-      }
-
-      chi2.obs.1 <- sum(X2.obs.1[])
-      chi2.sim.1 <- sum(X2.sim.1[])
-
-      # chi2.obs.2 <- sum(X2.obs.2[])
-      # chi2.sim.2 <- sum(X2.sim.2[])
+      # for (i in 1:nobs){
+      # 
+      #   #-----------------------------------------------
+      #   # Assess fit at level 1 (deviations from lambda)
+      #   #-----------------------------------------------
+      #   sim.count.1[i] ~ dpois(lam[i])
+      # 
+      #   sqerror.obs.1[i] <- pow(daily.count[i] - lam[i], 2)
+      #   sqerror.sim.1[i] <- pow(sim.count.1[i] - lam[i], 2)
+      # 
+      #   X2.obs.1[i]      <- sqerror.obs.1[i]/lam[i]
+      #   X2.sim.1[i]      <- sqerror.sim.1[i]/lam[i]
+      # 
+      #   # #-----------------------------------------------
+      #   # # Assess fit at level 2 (deviations from expected)
+      #   # #-----------------------------------------------
+      #   # sim.noise[i] ~ dnorm(0,daily.noise.tau)
+      #   # sim.count.2[i] ~ dpois(exp(log(expected[i]) + sim.noise[i]))
+      #   # 
+      #   # sqerror.obs.2[i] <- pow(daily.count[i] - expected[i], 2)
+      #   # sqerror.sim.2[i] <- pow(sim.count.2[i] - expected[i], 2)
+      #   # 
+      #   # X2.obs.2[i]      <- sqerror.obs.2[i]/expected[i]
+      #   # X2.sim.2[i]      <- sqerror.sim.2[i]/expected[i]
+      # 
+      # }
+      # 
+      # chi2.obs.1 <- sum(X2.obs.1[])
+      # chi2.sim.1 <- sum(X2.sim.1[])
+      # 
+      # # chi2.obs.2 <- sum(X2.obs.2[])
+      # # chi2.sim.2 <- sum(X2.sim.2[])
       
     }
     ",fill = TRUE)
@@ -493,16 +389,18 @@ sink()
 # PART 3: RUN ANALYSIS
 # ******************************************************************************************************************************************
 # ******************************************************************************************************************************************
+
 numCores <- detectCores() # Detect number of cores on machine
 numCores <- numCores - 2  # Reserve 2 cores for other tasks
 registerDoParallel(numCores) # Number of cores to use for parallel processing
 
 station_season_combinations = unique(dat_combined[,c("station","season")])
-
-#for (i in (1:nrow(station_season_combinations))){
-
+station_season_combinations = subset(station_season_combinations, season == "Fall")
 allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list, .packages = c("jagsUI")) %dopar% {
-
+#for (i in which(station_season_combinations$station == "LPBO" & station_season_combinations$season == "Fall")){
+  
+  start_time <- Sys.time()
+  
   dat = subset(dat_combined, station == station_season_combinations$station[i] & season == station_season_combinations$season[i])
   
   dat$doy_adjusted = dat$doy - min(dat$doy) + 1
@@ -521,43 +419,59 @@ allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list,
                    year = dat$year_adjusted,
                    nyear = max(dat$year_adjusted),
                    
-                   upper_limit = max(aggregate(ObservationCount~year_adjusted + area, data = dat, FUN = sum)$ObservationCount)*5,
+                   upper_limit = max(aggregate(ObservationCount~year_adjusted + area, data = dat, FUN = sum)$ObservationCount)*10,
                    
                    log.offset = log(dat$net.hrs),
                    pi = pi
   )
   
-  inits <- function() list(intercept = runif(jags.data$narea,0,100))
+  inits <- function() list(log.trend = rnorm(1,0,0.05),
+                           proc.sd = runif(1,0.1,0.5))
+  
+  parameters.to.save = c("log.trend",
+                         "proc.sd",
+                         
+                         "log.intercept",
+                         "daily.noise.sd",
+                         "mean.migrate.HYPERMEAN",
+                         "mean.migrate.HYPERSD",
+                         
+                         "mean.migrate",
+                         "sd.migrate",
+                         
+                         "expected.count",
+                         "mu",
+                         "N.total",
+                         "N"#,
+                         
+                         # Goodness of fit testing
+                         #"chi2.obs.1",
+                         #"chi2.sim.1"
+         
+  )
+  
   out <- jags(data = jags.data,
               model.file = "cmmn_separate_randompeak.jags",
-              parameters.to.save = c(
-                
-                "log.trend",
-                "proc.sd",
-                
-                "log.intercept",
-                "daily.noise.sd",
-                "mean.migrate.HYPERMEAN",
-                "mean.migrate.HYPERSD",
-                
-                "mean.migrate",
-                "sd.migrate",
-                
-                "expected.count",
-                "mu",
-                "N.total",
-                "N"
-                
-                
-              ),
+              parameters.to.save = parameters.to.save,
               inits = inits,
               n.chains = 2,
-              n.thin = 50,
+              n.thin = 5,
               n.iter = 200000,
               n.burnin = 100000)
+    
+  # Use this code to automatically select suitable number of iterations
+  # modelFit <- autorun.jags(model="cmmn_separate_randompeak.jags", 
+  #                          monitor=parameters.to.save, 
+  #                          data=jags.data, n.chains=3,
+  #                          method="parallel", 
+  #                          startburnin = 25000,
+  #                          psrf.target=1.02)
   
   max(unlist(out$Rhat),na.rm = TRUE)
   mean(unlist(out$Rhat) > 1.10,na.rm = TRUE)
+  
+  end_time <- Sys.time()
+  run_time <- end_time - start_time
   
   save(out, file = paste0("./jags_output/",station_season_combinations$station[i],"_",station_season_combinations$season[i],"_randompeak.RData"))
   
@@ -611,7 +525,7 @@ allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list,
   # #----------------------------------------------
   # 
   # daily.est.500 = melt(apply(out$sims.list$expected.count, c(2,3,4), FUN = function(x) quantile(x, 0.5)),
-  #                  value.name = "expected.500", varnames = c("area","doy_adjusted","year"))
+  #                      value.name = "expected.500", varnames = c("area","doy_adjusted","year"))
   # daily.est.025 = melt(apply(out$sims.list$expected.count, c(2,3,4), FUN = function(x) quantile(x, 0.025)),
   #                      value.name = "expected.025", varnames = c("area","doy_adjusted","year"))
   # daily.est.975 = melt(apply(out$sims.list$expected.count, c(2,3,4), FUN = function(x) quantile(x, 0.975)),
@@ -619,7 +533,7 @@ allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list,
   # 
   # daily.est = merge(merge(daily.est.500,daily.est.025), daily.est.975)
   # daily.est$doy = daily.est$doy_adjusted + min(dat$doy) - 1
-  # daily.est$YearCollected = daily.est$year + min(dat$YearCollected) - 1 
+  # daily.est$YearCollected = daily.est$year + min(dat$YearCollected) - 1
   # 
   # daily.plot = ggplot(data = subset(daily.est, YearCollected >= 2015))+
   #   #geom_line(aes(x = doy, y = expected.500), col = "black")+
@@ -693,38 +607,41 @@ for (i in 1:nrow(station_season_combinations)){
                    pi = pi)
   
   file = paste0("./jags_output/",station_season_combinations$station[i],"_",station_season_combinations$season[i],"_randompeak.RData")
+  
   if (file.exists(file)){
-  load(file = file)
-  
-  derived.trend = (log(out$sims.list$N.total[,ncol(out$sims.list$N.total)]) - log(out$sims.list$N.total[,1])) / (ncol(out$sims.list$N.total)-1)
-  
-  N_annual_station = data.frame(station = dat$station[1],
-                                season = dat$season[1],
-                                year = (1:jags.data$nyear) + min(dat$YearCollected) - 1,
-                                
-                                index.500 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.500)),
-                                index.025 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.025)),
-                                index.975 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.975)),
-                                
-                                index.500.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.500)),
-                                index.025.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.025)),
-                                index.975.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.975)),
-                                
-                                
-                                derived.trend.500 = quantile(derived.trend,0.5),
-                                derived.trend.025 = quantile(derived.trend,0.025),
-                                derived.trend.975 = quantile(derived.trend,0.975),
-                                
-                                mean.trend.500 = quantile(out$sims.list$log.trend,0.5),
-                                mean.trend.025 = quantile(out$sims.list$log.trend,0.025),
-                                mean.trend.975 = quantile(out$sims.list$log.trend,0.975),
-                                
-                                n.chains = out$mcmc.info$n.chains,
-                                n.samples = out$mcmc.info$n.samples,
-                                max.Rhat = max(unlist(out$Rhat),na.rm=TRUE),
-                                Rhat.1.1 = mean(unlist(out$Rhat)>1.1,na.rm=TRUE))
-  
-  results_summary = rbind(results_summary, N_annual_station)
+    load(file = file)
+    
+    derived.trend = (log(out$sims.list$N.total[,ncol(out$sims.list$N.total)]) - log(out$sims.list$N.total[,1])) / (ncol(out$sims.list$N.total)-1)
+    
+    # Store time series of annual index estimates at this station
+    N_annual_station = data.frame(station = dat$station[1],
+                                  season = dat$season[1],
+                                  
+                                  year = (1:jags.data$nyear) + min(dat$YearCollected) - 1,
+                                  
+                                  index.500 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.500)),
+                                  index.025 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.025)),
+                                  index.975 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.975)),
+                                  
+                                  index.500.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.500)),
+                                  index.025.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.025)),
+                                  index.975.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.975)),
+                                  
+                                  
+                                  derived.trend.500 = quantile(derived.trend,0.5),
+                                  derived.trend.025 = quantile(derived.trend,0.025),
+                                  derived.trend.975 = quantile(derived.trend,0.975),
+                                  
+                                  mean.trend.500 = quantile(out$sims.list$log.trend,0.5),
+                                  mean.trend.025 = quantile(out$sims.list$log.trend,0.025),
+                                  mean.trend.975 = quantile(out$sims.list$log.trend,0.975),
+                                  
+                                  n.chains = out$mcmc.info$n.chains,
+                                  n.samples = out$mcmc.info$n.samples,
+                                  max.Rhat = max(unlist(out$Rhat),na.rm=TRUE),
+                                  Rhat.1.1 = mean(unlist(out$Rhat)>1.1,na.rm=TRUE))
+    
+    results_summary = rbind(results_summary, N_annual_station)
   }
   
 }
@@ -732,10 +649,12 @@ for (i in 1:nrow(station_season_combinations)){
 head(results_summary)
 
 aggregate(max.Rhat ~ station + season, data = results_summary, FUN = mean)
+aggregate(Rhat.1.1 ~ station + season, data = results_summary, FUN = mean)
+
+
 #----------------------
 # Summarized results
 #----------------------
-
 
 results.fall = ggplot( data = subset(results_summary, season == "Fall" ) ) +
   #geom_hline(yintercept = 0, linetype = 1, col = "gray85", size = 2)+
