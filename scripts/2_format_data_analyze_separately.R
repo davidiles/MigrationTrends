@@ -455,7 +455,7 @@ allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list,
               parameters.to.save = parameters.to.save,
               inits = inits,
               n.chains = 2,
-              n.thin = 5,
+              n.thin = 50,
               n.iter = 200000,
               n.burnin = 100000)
     
