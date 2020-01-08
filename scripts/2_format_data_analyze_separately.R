@@ -74,6 +74,7 @@ for (i in 1:nrow(area_season_combinations_can)){
   dat_full$min_year = min_year
   dat_full$max_year = max_year
   
+  
   # Plot daily counts in each season
   daily_count_plot <- ggplot(data = dat_full) +
     geom_line(aes(x = doy, y = ObservationCount), col = "blue")+
@@ -201,49 +202,49 @@ dat_combined = subset(dat_combined, YearCollected >= 2006)
 # Plots of daily counts
 #----------------------------------
 
-# CAN Spring
-CAN_Spring_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Spring")) +
-  geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
-  facet_grid(station~YearCollected, scales = "free_y")+
-  xlab("Day of Year")+
-  ylab("Count")+
-  theme_bw()
-pdf(file = paste0(file = "../figures/CAN_Spring_plot.pdf"), width = 30,height=6)
-print(CAN_Spring_plot )
-dev.off()
-
-# CAN Fall
-CAN_Fall_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Fall")) +
-  geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
-  facet_grid(station~YearCollected, scales = "free_y")+
-  xlab("Day of Year")+
-  ylab("Count")+
-  theme_bw()
-pdf(file = paste0(file = "../figures/CAN_Fall_plot.pdf"), width = 30,height=6)
-print(CAN_Fall_plot )
-dev.off()
-
-# USA Spring
-USA_Spring_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Spring")) +
-  geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
-  facet_grid(station~YearCollected, scales = "free_y")+
-  xlab("Day of Year")+
-  ylab("Count(N/100 net hours)")+
-  theme_bw()
-pdf(file = paste0(file = "../figures/USA_Spring_plot.pdf"), width = 30,height=6)
-print(USA_Spring_plot )
-dev.off()
-
-# USA Fall
-USA_Fall_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Fall")) +
-  geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
-  facet_grid(station~YearCollected, scales = "free_y")+
-  xlab("Day of Year")+
-  ylab("Count(N/100 net hours)")+
-  theme_bw()
-pdf(file = paste0(file = "../figures/USA_Fall_plot.pdf"), width = 30,height=6)
-print(USA_Fall_plot )
-dev.off()
+# # CAN Spring
+# CAN_Spring_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Spring")) +
+#   geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
+#   facet_grid(station~YearCollected, scales = "free_y")+
+#   xlab("Day of Year")+
+#   ylab("Count")+
+#   theme_bw()
+# pdf(file = paste0(file = "../figures/CAN_Spring_plot.pdf"), width = 30,height=6)
+# print(CAN_Spring_plot )
+# dev.off()
+# 
+# # CAN Fall
+# CAN_Fall_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Fall")) +
+#   geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
+#   facet_grid(station~YearCollected, scales = "free_y")+
+#   xlab("Day of Year")+
+#   ylab("Count")+
+#   theme_bw()
+# pdf(file = paste0(file = "../figures/CAN_Fall_plot.pdf"), width = 30,height=6)
+# print(CAN_Fall_plot )
+# dev.off()
+# 
+# # USA Spring
+# USA_Spring_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Spring")) +
+#   geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
+#   facet_grid(station~YearCollected, scales = "free_y")+
+#   xlab("Day of Year")+
+#   ylab("Count(N/100 net hours)")+
+#   theme_bw()
+# pdf(file = paste0(file = "../figures/USA_Spring_plot.pdf"), width = 30,height=6)
+# print(USA_Spring_plot )
+# dev.off()
+# 
+# # USA Fall
+# USA_Fall_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Fall")) +
+#   geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
+#   facet_grid(station~YearCollected, scales = "free_y")+
+#   xlab("Day of Year")+
+#   ylab("Count(N/100 net hours)")+
+#   theme_bw()
+# pdf(file = paste0(file = "../figures/USA_Fall_plot.pdf"), width = 30,height=6)
+# print(USA_Fall_plot )
+# dev.off()
 
 #******************************************************************************************************************************************
 #******************************************************************************************************************************************
@@ -457,8 +458,8 @@ allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list,
               inits = inits,
               n.chains = 2,
               n.thin = 50,
-              n.iter = 20000,
-              n.burnin = 10000)
+              n.iter = 100000,
+              n.burnin = 50000)
     
   # Use this code to automatically select suitable number of iterations
   # modelFit <- autorun.jags(model="cmmn_separate_randompeak.jags", 
