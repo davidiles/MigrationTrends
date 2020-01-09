@@ -458,8 +458,8 @@ allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list,
               inits = inits,
               n.chains = 2,
               n.thin = 50,
-              n.iter = 100000,
-              n.burnin = 50000)
+              n.iter = 150000,
+              n.burnin = 100000)
     
   # Use this code to automatically select suitable number of iterations
   # modelFit <- autorun.jags(model="cmmn_separate_randompeak.jags", 

@@ -200,9 +200,12 @@ trend.df$trend.sign <- sign(trend.df$derived.trend.500)
 trend.df$trend.sign[which(trend.df$derived.trend.050 < 0 & trend.df$derived.trend.950 > 0)] <- 0
 trend.df$trend.sign[which(trend.df$derived.trend.050 > 0 & trend.df$derived.trend.950 < 0)] <- 0
 
-ggplot() +
+trend.plot <- ggplot() +
   geom_sf(data = bcr2, fill = "gray85", col = "gray65")+
   geom_sf(data = trend.df, aes(fill = derived.trend.500, shape = factor(trend.sign)), size = 5)+
   scale_fill_gradientn(colors = c("darkred","white","darkblue"), limits = c(-0.2,0.2), name = "Station\ntrend")+
   scale_shape_manual(values = c(25,21,24), name = "trend direction", guide = FALSE)+
-  coord_sf(xlim = c(-100, -50), ylim = c(35, 70), crs = crs(trend.df)) 
+  coord_sf(xlim = c(-100, -50), ylim = c(35, 70), crs = crs(trend.df)) +
+  theme_bw()
+
+print(trend.plot)
