@@ -124,7 +124,7 @@ results.fall = ggplot( data = subset(results_summary, season == "Fall" ) ) +
   #coord_cartesian(ylim = log( c(1/16 , 1,  16)))+
   theme_bw()
 
-results.fall
+#results.fall
 
 
 scaled.results = ggplot( data = subset(results_summary, year > 2006) ) +
@@ -145,7 +145,7 @@ scaled.results = ggplot( data = subset(results_summary, year > 2006) ) +
   coord_cartesian(ylim = log( c(1/16 , 1,  16)))+
   theme_bw()
 
-scaled.results
+#scaled.results
 
 # Log-scale trends
 # Note that derived trend is an endpoint analysis between 2006 and final year of data
@@ -155,8 +155,8 @@ trend.df = unique(results_summary[,c("station","season",
 
 trend.results = ggplot( data = trend.df) +
   
-  geom_errorbarh(aes(y = station, xmin = derived.trend.050, xmax = derived.trend.950, col = season), height = 0)+
-  geom_point(aes(y = station, x = derived.trend.500, col = season))+
+  geom_errorbarh(aes(y = station, xmin = mean.trend.050, xmax = mean.trend.950, col = season), height = 0)+
+  geom_point(aes(y = station, x = mean.trend.500, col = season))+
   ylab("Station")+
   xlab("Year")+
   facet_grid(.~season)+
@@ -165,8 +165,8 @@ trend.results = ggplot( data = trend.df) +
   scale_color_manual(values = c("blue","red"))+
   theme_bw()
 
-print(trend.results)
-trend.results
+#print(trend.results)
+#trend.results
 
 
 #******************************************************************************************************************************************
@@ -203,6 +203,6 @@ trend.df$trend.sign[which(trend.df$derived.trend.050 > 0 & trend.df$derived.tren
 ggplot() +
   geom_sf(data = bcr2, fill = "gray85", col = "gray65")+
   geom_sf(data = trend.df, aes(fill = derived.trend.500, shape = factor(trend.sign)), size = 5)+
-  scale_fill_gradientn(colors = c("darkred","white","darkblue"), limits = c(-0.2,0.2), name = "trend")+
+  scale_fill_gradientn(colors = c("darkred","white","darkblue"), limits = c(-0.2,0.2), name = "Station\ntrend")+
   scale_shape_manual(values = c(25,21,24), name = "trend direction", guide = FALSE)+
   coord_sf(xlim = c(-100, -50), ylim = c(35, 70), crs = crs(trend.df)) 

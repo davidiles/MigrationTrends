@@ -398,7 +398,7 @@ registerDoParallel(numCores) # Number of cores to use for parallel processing
 
 station_season_combinations = unique(dat_combined[,c("station","season")])
 station_season_combinations = subset(station_season_combinations, season == "Fall")
-allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list, .packages = c("jagsUI")) %dopar% {
+allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list, .packages = c("jagsUI")) %dopar% { #nrow(station_season_combinations)
 #for (i in which(station_season_combinations$station == "LPBO" & station_season_combinations$season == "Fall")){
   
   start_time <- Sys.time()
