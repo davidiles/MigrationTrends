@@ -37,17 +37,20 @@
 
       # Parameters describing the mean date of migration, and variation in that peak date among years
       mean.migrate.HYPERMEAN ~ dunif(1,nday)
-      mean.migrate.HYPERSD ~ dunif(0,nday)
+      mean.migrate.HYPERSD ~ dunif(0,nday/2)
       mean.migrate.HYPERTAU <- pow(mean.migrate.HYPERSD, -2)
       
       # Parameter describing the width of the migration window (assume this window is constant)
-      sd.migrate ~ dunif(0,nday)
+      sd.migrate ~ dunif(0,nday/2)
          
-      # Magnitude of observation error can differ among sub-areas at each station
-      for (A in 1:narea){
-        daily.noise.sd[A] ~ dunif(0,2)
-        daily.noise.tau[A] <- pow(daily.noise.sd[A],-2)
-      }
+      # Magnitude of observation error constrained to be equal across sub-areas at each station
+      # for (A in 1:narea){
+      #  daily.noise.sd[A] ~ dunif(0,2)
+      #  daily.noise.tau[A] <- pow(daily.noise.sd[A],-2)
+      # }
+      
+      daily.noise.sd ~ dunif(0,2)
+      daily.noise.tau <- pow(daily.noise.sd,-2)
       
         for (y in 1:nyear){
         
@@ -65,7 +68,7 @@
               expected.count[A,d,y] <- norm.density[A,d,y] * N[A,y]
               
               # Daily observation error
-              daily.noise[A,d,y] ~ dnorm(0,daily.noise.tau[A])
+              daily.noise[A,d,y] ~ dnorm(0, daily.noise.tau)
               
               log.lambda[A,d,y] <- log(expected.count[A,d,y]) + daily.noise[A,d,y]
               

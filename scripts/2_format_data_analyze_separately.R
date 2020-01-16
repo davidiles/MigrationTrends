@@ -32,11 +32,25 @@ rm(list=ls())
 
 #Data provided by Danielle Ethier (BSC).  Has been pre-processed/cleaned.  Does not include offsets or effort (i.e., hours nets were open).
 
-dat_can <- rbind(read.csv("../data/migration_counts/CAN/LPBO.BLPW.2018.csv") %>% add_column(., station = "LPBO"),
-                 read.csv("../data/migration_counts/CAN/PEPBO.BLPW.2018.csv") %>% add_column(., station = "PEPBO"),
-                 read.csv("../data/migration_counts/CAN/TCBO.BLPW.2018.csv") %>% add_column(., station = "TCBO"))
+dat_can <- rbind(read.csv("../data/migration_counts/CAN/2020_01_03/ACBO.BLPW.2018.csv") %>% add_column(., station = "ACBO"),
+                 read.csv("../data/migration_counts/CAN/2020_01_03/BPBO.BLPW.2018.csv") %>% add_column(., station = "BPBO"),
+                 read.csv("../data/migration_counts/CAN/2020_01_03/IPBO.BLPW.2018.csv") %>% add_column(., station = "IPBO"),
+                 
+                 read.csv("../data/migration_counts/CAN/2020_01_03/LMBO.BLPW.2018.csv") %>% add_column(., station = "LMBO"),
+                 read.csv("../data/migration_counts/CAN/2020_01_03/LPBO.BLPW.2018.csv") %>% add_column(., station = "LPBO"),
+                 read.csv("../data/migration_counts/CAN/2020_01_03/MGBO.BLPW.2018.csv") %>% add_column(., station = "MGBO"),
+                 
+                 read.csv("../data/migration_counts/CAN/2020_01_03/MNO.BLPW.2018.csv") %>% add_column(., station = "MNO"),
+                 read.csv("../data/migration_counts/CAN/2020_01_03/PEPBO.BLPW.2018.csv") %>% add_column(., station = "PEPBO"),
+                 read.csv("../data/migration_counts/CAN/2020_01_03/PIBO.BLPW.2018.csv") %>% add_column(., station = "PIBO"),
+                 
+                 read.csv("../data/migration_counts/CAN/2020_01_03/RUTH.BLPW.2018.csv") %>% add_column(., station = "RUTH"),
+                 read.csv("../data/migration_counts/CAN/2020_01_03/TCBO.BLPW.2018.csv") %>% add_column(., station = "TCBO"),
+                 read.csv("../data/migration_counts/CAN/2020_01_03/TLBBS.BLPW.2018.csv") %>% add_column(., station = "TLBBS"),
+                 read.csv("../data/migration_counts/CAN/2020_01_03/TTPBRS.BLPW.2018.csv") %>% add_column(., station = "TTPBRS")
+)
 
-# Create a column to distinguish specific sites within a particular station
+# Create a column to distinguish sub-areas at LPBO (area will be 1 for all other stations)
 dat_can$area <- 1
 dat_can$area[which(dat_can$SurveyAreaIdentifier == "LPBO2")] <- 2
 dat_can$area[which(dat_can$SurveyAreaIdentifier == "LPBO3")] <- 3
@@ -48,10 +62,14 @@ years_per_station <- aggregate(YearCollected ~ SurveyAreaIdentifier + season, da
 
 # Ensure that all stations/days/years/seasons are included as data
 area_season_combinations_can <- unique(dat_can[,c("SurveyAreaIdentifier","season")])
+
 dat_combined_can = data.frame()
 for (i in 1:nrow(area_season_combinations_can)){
+  
   dat <- subset(dat_can, SurveyAreaIdentifier == area_season_combinations_can$SurveyAreaIdentifier[i] & season == area_season_combinations_can$season[i])
   if (nrow(dat) == 0) next
+  
+  
   min_doy <- min(dat$doy)
   max_doy <- max(dat$doy)
   min_year <- min(dat$YearCollected)
@@ -74,18 +92,6 @@ for (i in 1:nrow(area_season_combinations_can)){
   dat_full$min_year = min_year
   dat_full$max_year = max_year
   
-  
-  # Plot daily counts in each season
-  daily_count_plot <- ggplot(data = dat_full) +
-    geom_line(aes(x = doy, y = ObservationCount), col = "blue")+
-    facet_wrap(.~YearCollected)+
-    ggtitle(dat_full$SurveyAreaIdentifier[1])+
-    theme_bw()
-  
-  #pdf(file = paste0("../figures/station_plots/",dat_full$season[1],"_",dat_full$SurveyAreaIdentifier,".pdf"), width = 20,height=10)
-  #print(daily.count.plot)
-  #dev.off()
-  
   dat_combined_can = rbind(dat_combined_can, dat_full)
 }
 dat_combined_can$country = "CAN"
@@ -98,27 +104,26 @@ dat_usa <- rbind(readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - 
                  readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - BIBS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
                  
                  readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - BSBO fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
-                 
                  readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - BSBO spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
                  
-                 
                  readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - FBBS spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
-                 
-                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - MCCS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
-                 
-                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - MCCS spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"),
-                 
                  readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - FBBS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
                  
-                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - KWRS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"))
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - KWRS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
+                 
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - MCCS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall"),
+                 readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - MCCS spring.xlsx") %>% as.data.frame() %>% add_column(., season = "Spring"))
 
 # datasets with different column names
 tmp = readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - PARC fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall")
-
 colnames(tmp) <- colnames(dat_usa)
-
 dat_usa <- rbind(dat_usa, tmp)
 rm(tmp)    
+
+tmp = readxl::read_xlsx("../data/migration_counts/USA/Cleaned BLPW - CFMS fall.xlsx") %>% as.data.frame() %>% add_column(., season = "Fall")
+colnames(tmp) <- colnames(dat_usa)
+dat_usa <- rbind(dat_usa, tmp)
+rm(tmp) 
 
 # Fill net N/100 net-hr column
 dat_usa$`N/100 net-hr` = dat_usa$N/dat_usa$`Net-hrs`*100
@@ -172,13 +177,6 @@ for (i in 1:nrow(area_season_combinations_usa)){
   dat_full$min_year = min_year
   dat_full$max_year = max_year
   
-  # Plot daily counts in each season
-  daily_count_plot <- ggplot(data = dat_full) +
-    geom_line(aes(x = doy, y = ObservationCount), col = "blue")+
-    facet_wrap(.~YearCollected)+
-    ggtitle(dat_full$station[1])+
-    theme_bw()
-  
   dat_combined_usa = rbind(dat_combined_usa, dat_full)
 }
 dat_combined_usa$country = "USA"
@@ -199,56 +197,58 @@ rm(list=setdiff(ls(), c("dat_combined")))
 dat_combined = subset(dat_combined, YearCollected >= 2006)
 
 #----------------------------------
+#----------------------------------
 # Plots of daily counts
 #----------------------------------
+#----------------------------------
 
-# # CAN Spring
-# CAN_Spring_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Spring")) +
-#   geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
-#   facet_grid(station~YearCollected, scales = "free_y")+
-#   xlab("Day of Year")+
-#   ylab("Count")+
-#   theme_bw()
-# pdf(file = paste0(file = "../figures/CAN_Spring_plot.pdf"), width = 30,height=6)
-# print(CAN_Spring_plot )
-# dev.off()
-# 
-# # CAN Fall
-# CAN_Fall_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Fall")) +
-#   geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
-#   facet_grid(station~YearCollected, scales = "free_y")+
-#   xlab("Day of Year")+
-#   ylab("Count")+
-#   theme_bw()
-# pdf(file = paste0(file = "../figures/CAN_Fall_plot.pdf"), width = 30,height=6)
-# print(CAN_Fall_plot )
-# dev.off()
-# 
-# # USA Spring
-# USA_Spring_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Spring")) +
-#   geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
-#   facet_grid(station~YearCollected, scales = "free_y")+
-#   xlab("Day of Year")+
-#   ylab("Count(N/100 net hours)")+
-#   theme_bw()
-# pdf(file = paste0(file = "../figures/USA_Spring_plot.pdf"), width = 30,height=6)
-# print(USA_Spring_plot )
-# dev.off()
-# 
-# # USA Fall
-# USA_Fall_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Fall")) +
-#   geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
-#   facet_grid(station~YearCollected, scales = "free_y")+
-#   xlab("Day of Year")+
-#   ylab("Count(N/100 net hours)")+
-#   theme_bw()
-# pdf(file = paste0(file = "../figures/USA_Fall_plot.pdf"), width = 30,height=6)
-# print(USA_Fall_plot )
-# dev.off()
+# CAN Spring
+CAN_Spring_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Spring")) +
+  geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
+  facet_grid(station~YearCollected, scales = "free_y")+
+  xlab("Day of Year")+
+  ylab("Count")+
+  theme_bw()
+pdf(file = paste0(file = "../figures/data_summaries/CAN_Spring_plot.pdf"), width = 30,height=6)
+print(CAN_Spring_plot )
+dev.off()
+
+# CAN Fall
+CAN_Fall_plot <- ggplot(data = subset(dat_combined, country == "CAN" & season == "Fall")) +
+  geom_point(aes(x = doy, y = ObservationCount), col = "blue")+
+  facet_grid(station~YearCollected, scales = "free_y")+
+  xlab("Day of Year")+
+  ylab("Count")+
+  theme_bw()
+pdf(file = paste0(file = "../figures/data_summaries/CAN_Fall_plot.pdf"), width = 30,height=6)
+print(CAN_Fall_plot )
+dev.off()
+
+# USA Spring
+USA_Spring_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Spring")) +
+  geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
+  facet_grid(station~YearCollected, scales = "free_y")+
+  xlab("Day of Year")+
+  ylab("Count(N/100 net hours)")+
+  theme_bw()
+pdf(file = paste0(file = "../figures/data_summaries/USA_Spring_plot.pdf"), width = 30,height=6)
+print(USA_Spring_plot )
+dev.off()
+
+# USA Fall
+USA_Fall_plot <- ggplot(data = subset(dat_combined, country == "USA" & season == "Fall")) +
+  geom_point(aes(x = doy, y = N.per.100.net.hrs), col = "blue")+
+  facet_grid(station~YearCollected, scales = "free_y")+
+  xlab("Day of Year")+
+  ylab("Count(N/100 net hours)")+
+  theme_bw()
+pdf(file = paste0(file = "../figures/data_summaries/USA_Fall_plot.pdf"), width = 30,height=6)
+print(USA_Fall_plot )
+dev.off()
 
 #******************************************************************************************************************************************
 #******************************************************************************************************************************************
-# PART 2: SET UP ANALYSIS
+# PART 2: SET UP BAYESIAN ANALYSIS
 #******************************************************************************************************************************************
 #******************************************************************************************************************************************
 
@@ -298,17 +298,20 @@ cat("
 
       # Parameters describing the mean date of migration, and variation in that peak date among years
       mean.migrate.HYPERMEAN ~ dunif(1,nday)
-      mean.migrate.HYPERSD ~ dunif(0,nday)
+      mean.migrate.HYPERSD ~ dunif(0,nday/2)
       mean.migrate.HYPERTAU <- pow(mean.migrate.HYPERSD, -2)
       
       # Parameter describing the width of the migration window (assume this window is constant)
-      sd.migrate ~ dunif(0,nday)
+      sd.migrate ~ dunif(0,nday/2)
          
-      # Magnitude of observation error can differ among sub-areas at each station
-      for (A in 1:narea){
-        daily.noise.sd[A] ~ dunif(0,2)
-        daily.noise.tau[A] <- pow(daily.noise.sd[A],-2)
-      }
+      # Magnitude of observation error constrained to be equal across sub-areas at each station
+      # for (A in 1:narea){
+      #  daily.noise.sd[A] ~ dunif(0,2)
+      #  daily.noise.tau[A] <- pow(daily.noise.sd[A],-2)
+      # }
+      
+      daily.noise.sd ~ dunif(0,2)
+      daily.noise.tau <- pow(daily.noise.sd,-2)
       
         for (y in 1:nyear){
         
@@ -326,7 +329,7 @@ cat("
               expected.count[A,d,y] <- norm.density[A,d,y] * N[A,y]
               
               # Daily observation error
-              daily.noise[A,d,y] ~ dnorm(0,daily.noise.tau[A])
+              daily.noise[A,d,y] ~ dnorm(0, daily.noise.tau)
               
               log.lambda[A,d,y] <- log(expected.count[A,d,y]) + daily.noise[A,d,y]
               
@@ -384,6 +387,27 @@ cat("
 sink()
 
 
+#--------------------------------------------
+# Restrict analysis to sites with monitoring windows longer than 3 weeks
+#--------------------------------------------
+
+# Examine analysis windows (date ranges with observed counts)
+date_ranges_start <- aggregate(doy ~ YearCollected + season + station, data = na.omit(dat_combined[,c("YearCollected","season","station","doy","ObservationCount")]), FUN = min)
+date_ranges_end <- aggregate(doy ~ YearCollected + season + station, data = na.omit(dat_combined[,c("YearCollected","season","station","doy","ObservationCount")]), FUN = max)
+colnames(date_ranges_start)[4] <- "start"
+colnames(date_ranges_end)[4] <- "end"
+date_ranges <- merge(date_ranges_start, date_ranges_end, all = TRUE)
+date_ranges$window_length <- date_ranges$end - date_ranges$start
+
+#Median window length
+median_window_lengths <- aggregate(window_length ~ station + season, data = date_ranges, FUN = median)
+median_window_lengths$station_season <- paste0(median_window_lengths$station,"_",median_window_lengths$season)
+longer_than_3wks <- subset(median_window_lengths, window_length >= 21)
+
+dat_combined$station_season = paste0(dat_combined$station,"_",dat_combined$season)
+dat_combined <- subset(dat_combined, station_season %in% longer_than_3wks$station_season)
+#--------------------------------------------
+
 write.csv(dat_combined, file = "./processed_data/dat_combined.csv", row.names = FALSE)
 
 # ******************************************************************************************************************************************
@@ -393,15 +417,17 @@ write.csv(dat_combined, file = "./processed_data/dat_combined.csv", row.names = 
 # ******************************************************************************************************************************************
 
 numCores <- detectCores() # Detect number of cores on machine
-numCores <- numCores - 2  # Reserve 2 cores for other tasks
+numCores <- numCores - 1  # Reserve 1 core for other tasks
 registerDoParallel(numCores) # Number of cores to use for parallel processing
 
 station_season_combinations = unique(dat_combined[,c("station","season")])
-station_season_combinations = subset(station_season_combinations, season == "Fall")
-allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list, .packages = c("jagsUI")) %dopar% { #nrow(station_season_combinations)
-#for (i in which(station_season_combinations$station == "LPBO" & station_season_combinations$season == "Fall")){
+
+allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list, .packages = c("jagsUI")) %dopar% {
   
-  start_time <- Sys.time()
+  # allresults = foreach(i = (c(4,15,27,30)), .combine = list, .packages = c("jagsUI")) %dopar% {
+  # i = which(station_season_combinations$station == "MGBO" & station_season_combinations$season == "Spring")
+  
+    start_time <- Sys.time()
   
   dat = subset(dat_combined, station == station_season_combinations$station[i] & season == station_season_combinations$season[i])
   
@@ -449,7 +475,7 @@ allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list,
                          # Goodness of fit testing
                          #"chi2.obs.1",
                          #"chi2.sim.1"
-         
+                         
   )
   
   out <- jags(data = jags.data,
@@ -457,11 +483,11 @@ allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list,
               parameters.to.save = parameters.to.save,
               inits = inits,
               n.chains = 2,
-              n.thin = 50,
-              n.iter = 150000,
-              n.burnin = 100000)
-    
-  # Use this code to automatically select suitable number of iterations
+              n.thin = 100,
+              n.iter = 1000000,
+              n.burnin = 500000)
+  
+  # Optional code to automatically select suitable number of iterations to achieve convergence
   # modelFit <- autorun.jags(model="cmmn_separate_randompeak.jags", 
   #                          monitor=parameters.to.save, 
   #                          data=jags.data, n.chains=3,
@@ -479,98 +505,6 @@ allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list,
   
   out
   
-  # #******************************************************************************************************************************************
-  # #******************************************************************************************************************************************
-  # # PART 4: SUMMARIZE RESULTS
-  # #******************************************************************************************************************************************
-  # #******************************************************************************************************************************************
-  # 
-  # # Annual indices
-  # N.area = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.500)), varnames = c("area","year"), value.name = "index.500")
-  # N.area$index.025 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.025)), varnames = c("area","year"), value.name = "index.025")$index.025
-  # N.area$index.975 = melt(apply(out$sims.list$N,c(2,3),function(x) quantile(x,0.975)), varnames = c("area","year"), value.name = "index.975")$index.975
-  # 
-  # N.overall = data.frame(area = "Overall",
-  #                        year = 1:jags.data$nyear,
-  #                        index.500 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.500)),
-  #                        index.025 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.025)),
-  #                        index.975 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.975)))
-  # 
-  # N.area$area = factor(N.area$area)
-  # 
-  # N.overall = rbind(N.overall,N.area)
-  # N.overall$year = N.overall$year + min(dat$YearCollected) - 1
-  # 
-  # # area.plot = ggplot( data = N.overall ) +
-  # #   geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975), col = factor(area)), width = 0)+
-  # #   geom_point(aes(x = year, y = log(index.500), col = factor(area)))+
-  # #   facet_grid(area~., scales = "free")+
-  # #   ylab("Index")+
-  # #   xlab("Year")+
-  # #   scale_color_manual(values = RColorBrewer::brewer.pal(length(unique(N.overall$area)), "Dark2"), name = "Station/Area")+
-  # #   theme_bw()
-  # #
-  # # print(area.plot)
-  # #
-  # overall.plot = ggplot( data = subset(N.overall, area == "Overall") ) +
-  #   geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975)), width = 0)+
-  #   geom_point(aes(x = year, y = log(index.500)))+
-  #   ylab("Index")+
-  #   xlab("Year")+
-  #   ggtitle(paste0(dat$station[1]," (Overall)"))+
-  #   theme_bw()
-  # 
-  # print(overall.plot)
-  # 
-  # #----------------------------------------------
-  # # Overlay observed counts on expected counts
-  # #----------------------------------------------
-  # 
-  # daily.est.500 = melt(apply(out$sims.list$expected.count, c(2,3,4), FUN = function(x) quantile(x, 0.5)),
-  #                      value.name = "expected.500", varnames = c("area","doy_adjusted","year"))
-  # daily.est.025 = melt(apply(out$sims.list$expected.count, c(2,3,4), FUN = function(x) quantile(x, 0.025)),
-  #                      value.name = "expected.025", varnames = c("area","doy_adjusted","year"))
-  # daily.est.975 = melt(apply(out$sims.list$expected.count, c(2,3,4), FUN = function(x) quantile(x, 0.975)),
-  #                      value.name = "expected.975", varnames = c("area","doy_adjusted","year"))
-  # 
-  # daily.est = merge(merge(daily.est.500,daily.est.025), daily.est.975)
-  # daily.est$doy = daily.est$doy_adjusted + min(dat$doy) - 1
-  # daily.est$YearCollected = daily.est$year + min(dat$YearCollected) - 1
-  # 
-  # daily.plot = ggplot(data = subset(daily.est, YearCollected >= 2015))+
-  #   #geom_line(aes(x = doy, y = expected.500), col = "black")+
-  #   #geom_ribbon(aes(x = doy, ymin = expected.025, ymax = expected.975), alpha = 0.3)+
-  #   
-  #   geom_point(data = subset(dat, YearCollected >= 2015), aes(x = doy, y = ObservationCount), col = "blue", alpha = 0.3)+
-  #   xlab("Day of Year")+
-  #   ylab("Daily Estimated Total")+
-  #   ggtitle(dat$station[1])+
-  #   facet_grid(.~YearCollected, scales = "free")+
-  #   theme_bw()+
-  #   theme(axis.text.x = element_text(size = 5))
-  # print(daily.plot)
-  # 
-  # # Compare expected and actual seasonal totals
-  # 
-  # dat$year_doy = paste(dat$YearCollected,dat$doy, sep="_")
-  # daily.est$year_doy = paste(daily.est$YearCollected,daily.est$doy,sep="_")
-  # daily.est.subset = subset(daily.est, year_doy %in% dat$year_doy)
-  # 
-  # seasonal.total.obs = aggregate(ObservationCount ~ YearCollected, data = dat, FUN = sum)
-  # seasonal.total.exp = aggregate(expected.500 ~ YearCollected, data = daily.est.subset, FUN = sum)
-  # seasonal.total = merge(seasonal.total.obs,seasonal.total.exp)
-  # 
-  # obs_vs_exp = ggplot(data = seasonal.total)+
-  #   stat_smooth(aes(x = log(expected.500), y = log(ObservationCount)), method = "lm", alpha = 0.2, fill = "dodgerblue")+
-  #   geom_point(aes(x = log(expected.500), y = log(ObservationCount)), col = "blue")+
-  #   xlab("log(Expected Seasonal Total)")+
-  #   ylab("log(Observed Seasonal Total)")+
-  #   ggtitle(dat$station[1])+
-  #   theme_bw()
-  # print(obs_vs_exp)
-  # 
-  # summary(lm(log(ObservationCount) ~ log(expected.500), data = seasonal.total))
-  # 
 }
 
 #******************************************************************************************************************************************
@@ -650,91 +584,10 @@ for (i in 1:nrow(station_season_combinations)){
 
 head(results_summary)
 
+# Convergence statistics for each station
 aggregate(max.Rhat ~ station + season, data = results_summary, FUN = mean)
 aggregate(Rhat.1.1 ~ station + season, data = results_summary, FUN = mean)
 
-
-#----------------------
-# Summarized results
-#----------------------
-
-results.fall = ggplot( data = subset(results_summary, season == "Fall" ) ) +
-  #geom_hline(yintercept = 0, linetype = 1, col = "gray85", size = 2)+
-  #geom_hline(yintercept = log(c(1/5,5)), linetype = 1, col = "gray85", size = 1)+
-  
-  geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975)), width = 0, col = "red")+
-  geom_point(aes(x = year, y = log(index.500)), col = "red")+
-  ylab("Population index")+
-  xlab("Year")+
-  facet_grid(station~season, scales = "free")+
-  
-  scale_color_manual(values = c("red","blue"))+
-  #scale_y_continuous(breaks = log( c(1/5 , 1,  5)),
-  #                   labels = c("5-fold decrease", "no change", "5-fold increase"),
-  #                  minor_breaks = NULL)+
-  
-  #coord_cartesian(ylim = log( c(1/16 , 1,  16)))+
-  theme_bw()
-
-results.fall
-
-
-results.spring = ggplot( data = subset(results_summary, season == "Spring" ) ) +
-  #geom_hline(yintercept = 0, linetype = 1, col = "gray85", size = 2)+
-  #geom_hline(yintercept = log(c(1/5,5)), linetype = 1, col = "gray85", size = 1)+
-  
-  geom_errorbar(aes(x = year, ymin = log(index.025), ymax = log(index.975)), width = 0, col = "blue")+
-  geom_point(aes(x = year, y = log(index.500)), col = "blue")+
-  ylab("Population index")+
-  xlab("Year")+
-  facet_grid(station~season, scales = "free")+
-  
-  #scale_y_continuous(breaks = log( c(1/5 , 1,  5)),
-  #                   labels = c("5-fold decrease", "no change", "5-fold increase"),
-  #                  minor_breaks = NULL)+
-  
-  #coord_cartesian(ylim = log( c(1/16 , 1,  16)))+
-  theme_bw()
-
-results.spring
-
-
-scaled.results = ggplot( data = subset(results_summary, year > 2006) ) +
-  geom_hline(yintercept = 0, linetype = 1, col = "gray85", size = 2)+
-  geom_hline(yintercept = log(c(1/5,5)), linetype = 1, col = "gray85", size = 1)+
-  
-  geom_errorbar(aes(x = year, ymin = log(index.025.rescaled), ymax = log(index.975.rescaled), col = season), width = 0)+
-  geom_point(aes(x = year, y = log(index.500.rescaled), col = season))+
-  ylab("Population change relative to 2006")+
-  xlab("Year")+
-  facet_grid(station~season)+
-  
-  scale_color_manual(values = c("blue","red"))+
-  scale_y_continuous(breaks = log( c(1/5 , 1,  5)),
-                     labels = c("5-fold decrease", "no change", "5-fold increase"),
-                     minor_breaks = NULL)+
-  
-  coord_cartesian(ylim = log( c(1/16 , 1,  16)))+
-  theme_bw()
-
-scaled.results
-
-# Log trends
-trend.df = unique(results_summary[,c("station","season",
-                                     "mean.trend.025","mean.trend.500","mean.trend.975",
-                                     "derived.trend.025","derived.trend.500","derived.trend.975")])
-
-trend.results = ggplot( data = trend.df) +
-  
-  geom_errorbarh(aes(y = station, xmin = mean.trend.025, xmax = mean.trend.975, col = season), height = 0)+
-  geom_point(aes(y = station, x = mean.trend.500, col = season))+
-  ylab("Station")+
-  xlab("Year")+
-  facet_grid(.~season)+
-  coord_cartesian(xlim=c(-0.5,0.5))+
-  geom_vline(xintercept = 0, linetype = 2)+
-  scale_color_manual(values = c("blue","red"))+
-  theme_bw()
-
-print(trend.results)
-trend.results
+# Remove trends for stations that did not converge
+max.Rhat.stations <- aggregate(max.Rhat ~ station + season, data = results_summary, FUN = mean)
+results_summary <- subset(results_summary, station %in% subset(max.Rhat.stations, max.Rhat <= 1.10)$station)
