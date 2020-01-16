@@ -5,7 +5,6 @@
 # library(dplyr)
 # library(ggrepel)
 
-
 # Required packages
 my_packs <- c(
   
@@ -18,6 +17,9 @@ my_packs <- c(
   'bbsBayes','jagsUI','ggprepel'
 )
 
+# if any of them are not installed, install them
+if (any(!my_packs %in% installed.packages()[, 'Package'])) {install.packages(my_packs[which(!my_packs %in% installed.packages()[, 'Package'])],dependencies = TRUE)}
+lapply(my_packs, require, character.only = TRUE)
 
 rm(list=ls())
 

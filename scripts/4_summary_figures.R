@@ -135,7 +135,7 @@ for (i in 1:nrow(station_season_combinations)){
       theme(axis.text.x = element_text(size = 5))
     
    daily.plot = daily.plot +
-        geom_point(data = dat, aes(x = doy, y = ObservationCount / net.hrs), col = "blue", alpha = 0.3)
+        geom_point(data = dat, aes(x = doy, y = ObservationCount / net.hrs), col = "black", alpha = 0.3)
     
     pdf(file = paste0("../figures/results_station_plots/",dat$season[1],"_",dat$station[1],"_dailyexpected.pdf"), width = 12, height = length(unique(dat$area))*3)
     print(daily.plot)
@@ -170,7 +170,7 @@ head(results_summary)
 
 # Remove results for stations that did not converge
 max.Rhat.stations <- aggregate(max.Rhat ~ station + season, data = results_summary, FUN = mean)
-results_summary <- subset(results_summary, station %in% subset(max.Rhat.stations, max.Rhat <= 1.10)$station)
+results_summary <- subset(results_summary, station %in% subset(max.Rhat.stations, max.Rhat <= 1.2)$station)
 max.Rhat.stations <- aggregate(max.Rhat ~ station + season, data = results_summary, FUN = mean)
 
 
@@ -182,7 +182,7 @@ results.fall = ggplot( data = subset(results_summary, season == "Fall" ) ) +
   #geom_hline(yintercept = 0, linetype = 1, col = "gray85", size = 2)+
   #geom_hline(yintercept = log(c(1/5,5)), linetype = 1, col = "gray85", size = 1)+
   
-  geom_errorbar(aes(x = year, ymin = log(index.050), ymax = log(index.950)), width = 0, col = "red")+
+  geom_errorbar(aes(x = year, ymin = log(index.050), ymax = log(index.950)), width = 0, col = "blue")+
   geom_point(aes(x = year, y = log(index.500)), col = "red")+
   ylab("Population index")+
   xlab("Year")+
@@ -192,7 +192,9 @@ results.fall = ggplot( data = subset(results_summary, season == "Fall" ) ) +
 
   theme_bw()
 
-results.fall
+pdf(file = "../figures/results_annual_indices/fall_indices.pdf", width = 8, height = 20)
+print(results.fall)
+dev.off()
 
 results.spring = ggplot( data = subset(results_summary, season == "Spring" ) ) +
   #geom_hline(yintercept = 0, linetype = 1, col = "gray85", size = 2)+
@@ -208,27 +210,29 @@ results.spring = ggplot( data = subset(results_summary, season == "Spring" ) ) +
   
   theme_bw()
 
-results.spring
+pdf(file = "../figures/results_annual_indices/spring_indices.pdf", width = 8, height = 20)
+print(results.spring)
+dev.off()
 
-scaled.results = ggplot( data = subset(results_summary, year >= 2006) ) +
-  geom_hline(yintercept = 0, linetype = 1, col = "gray85", size = 2)+
-  geom_hline(yintercept = log(c(1/5,5)), linetype = 1, col = "gray85", size = 1)+
-  
-  geom_errorbar(aes(x = year, ymin = log(index.050.rescaled), ymax = log(index.950.rescaled), col = season), width = 0)+
-  geom_point(aes(x = year, y = log(index.500.rescaled), col = season))+
-  ylab("Population change relative to 2006")+
-  xlab("Year")+
-  facet_grid(station~season)+
-  
-  scale_color_manual(values = c("blue","red"))+
-  scale_y_continuous(breaks = log( c(1/5 , 1,  5)),
-                     labels = c("5-fold decrease", "no change", "5-fold increase"),
-                     minor_breaks = NULL)+
-  
-  coord_cartesian(ylim = log( c(1/16 , 1,  16)))+
-  theme_bw()
-
-scaled.results
+# scaled.results = ggplot( data = subset(results_summary, year >= 2006) ) +
+#   geom_hline(yintercept = 0, linetype = 1, col = "gray85", size = 2)+
+#   geom_hline(yintercept = log(c(1/5,5)), linetype = 1, col = "gray85", size = 1)+
+#   
+#   geom_errorbar(aes(x = year, ymin = log(index.050.rescaled), ymax = log(index.950.rescaled), col = season), width = 0)+
+#   geom_point(aes(x = year, y = log(index.500.rescaled), col = season))+
+#   ylab("Population change relative to 2006")+
+#   xlab("Year")+
+#   facet_grid(station~season)+
+#   
+#   scale_color_manual(values = c("blue","red"))+
+#   scale_y_continuous(breaks = log( c(1/5 , 1,  5)),
+#                      labels = c("5-fold decrease", "no change", "5-fold increase"),
+#                      minor_breaks = NULL)+
+#   
+#   coord_cartesian(ylim = log( c(1/16 , 1,  16)))+
+#   theme_bw()
+# 
+# scaled.results
 
 # Log-scale trends
 # Note that derived trend is an endpoint analysis between 2006 and final year of data
@@ -248,8 +252,11 @@ trend.results = ggplot( data = trend.df) +
   scale_color_manual(values = c("blue","red"))+
   theme_bw()
 
-print(trend.results)
 
+
+pdf(file = "../figures/results_trends/linear_trends.pdf", width = 8, height = 5)
+print(trend.results)
+dev.off()
 
 #******************************************************************************************************************************************
 # PART 3: PLOT STATION TRENDS ON A MAP
@@ -301,19 +308,45 @@ trend.df$trend.sign[which(trend.df$mean.trend.050 < 0 & trend.df$mean.trend.950 
 trend.df$trend.sign[which(trend.df$mean.trend.050 > 0 & trend.df$mean.trend.950 < 0)] <- 0
 trend.df$trend.sign <- factor(trend.df$trend.sign, levels=c(-1,0,1))
 
-
-trend.plot.fall <- ggplot() +   theme_bw() +
+#-------------------------
+# Fall trends
+#-------------------------
+trend.map.fall <- ggplot() +   theme_bw() +
   
   geom_sf(data = bcr2, fill = "gray85", col = "gray92") +
 
-  geom_sf(data = subset(trend.df, season == "Fall"), aes(fill = mean.trend.500, shape = trend.sign, size = n.years), alpha = 0.75)+
+  geom_sf(data = subset(trend.df, season == "Fall"), aes(fill = mean.trend.500, shape = trend.sign), alpha = 0.75, size = 3)+
  
   # geom_sf_text(data = subset(trend.df, season == "Fall"), aes(label = station), size = 2, col = "black") +
   
   scale_fill_gradientn(colors = c("darkred","white","darkblue"), limits = c(-0.18,0.18), name = "Station\ntrend")+
   
-  scale_shape_manual(values = c(25,21,24), drop = FALSE,name = "trend direction", guide = FALSE)+
+  scale_shape_manual(values = c(25,21,24), drop = FALSE,name = "trend direction", guide = FALSE)#+
   
-  scale_size_continuous(range = c(1,5), limits = c(1,max(trend.df$n.years)))
+  #scale_size_continuous(range = c(1,5), limits = c(1,max(trend.df$n.years)), guide = FALSE)
   
-print(trend.plot.fall)
+pdf(file = "../figures/results_trends/trend_map_fall.pdf", width = 8, height = 8)
+print(trend.map.fall)
+dev.off()
+
+#-------------------------
+# Spring trends
+#-------------------------
+trend.map.spring <- ggplot() +   theme_bw() +
+  
+  geom_sf(data = bcr2, fill = "gray85", col = "gray92") +
+  
+  geom_sf(data = subset(trend.df, season == "Spring"), aes(fill = mean.trend.500, shape = trend.sign), alpha = 0.75, size = 4)+
+  
+  #geom_sf_text(data = subset(trend.df, season == "Spring"), aes(label = station), size = 2, col = "black") +
+  
+  scale_fill_gradientn(colors = c("darkred","white","darkblue"), limits = c(-0.18,0.18), name = "Station\ntrend")+
+  
+  scale_shape_manual(values = c(25,21,24), drop = FALSE,name = "trend direction", guide = FALSE)#+
+
+#scale_size_continuous(range = c(1,5), limits = c(1,max(trend.df$n.years)), guide = FALSE)
+
+
+pdf(file = "../figures/results_trends/trend_map_spring.pdf", width = 8, height = 8)
+print(trend.map.spring)
+dev.off()
