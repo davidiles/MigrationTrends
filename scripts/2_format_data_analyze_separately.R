@@ -507,87 +507,87 @@ allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list,
   
 }
 
-#******************************************************************************************************************************************
-#******************************************************************************************************************************************
-# PART 5: PLOT RESULTS
-#******************************************************************************************************************************************
-#******************************************************************************************************************************************
-rm(list=setdiff(ls(), c("dat_combined")))
-
-station_season_combinations = unique(dat_combined[,c("station","season")])
-
-results_summary = data.frame()
-for (i in 1:nrow(station_season_combinations)){
-  
-  dat = subset(dat_combined, station == station_season_combinations$station[i] & season == station_season_combinations$season[i])
-  
-  dat$doy_adjusted = dat$doy - min(dat$doy) + 1
-  dat$year_adjusted = dat$YearCollected - min(dat$YearCollected) + 1
-  dat = subset(dat, !is.na(ObservationCount))
-  
-  jags.data = list(daily.count = dat$ObservationCount,
-                   nobs = nrow(dat),
-                   
-                   area = dat$area,
-                   narea = max(dat$area),
-                   
-                   day = dat$doy_adjusted,
-                   nday = max(dat$doy_adjusted),
-                   
-                   year = dat$year_adjusted,
-                   nyear = max(dat$year_adjusted),
-                   
-                   upper_limit = max(aggregate(ObservationCount~year_adjusted + area, data = dat, FUN = sum)$ObservationCount)*5,
-                   
-                   log.offset = log(dat$net.hrs),
-                   pi = pi)
-  
-  file = paste0("./jags_output/",station_season_combinations$station[i],"_",station_season_combinations$season[i],"_randompeak.RData")
-  
-  if (file.exists(file)){
-    load(file = file)
-    
-    derived.trend = (log(out$sims.list$N.total[,ncol(out$sims.list$N.total)]) - log(out$sims.list$N.total[,1])) / (ncol(out$sims.list$N.total)-1)
-    
-    # Store time series of annual index estimates at this station
-    N_annual_station = data.frame(station = dat$station[1],
-                                  season = dat$season[1],
-                                  
-                                  year = (1:jags.data$nyear) + min(dat$YearCollected) - 1,
-                                  
-                                  index.500 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.500)),
-                                  index.025 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.025)),
-                                  index.975 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.975)),
-                                  
-                                  index.500.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.500)),
-                                  index.025.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.025)),
-                                  index.975.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.975)),
-                                  
-                                  
-                                  derived.trend.500 = quantile(derived.trend,0.5),
-                                  derived.trend.025 = quantile(derived.trend,0.025),
-                                  derived.trend.975 = quantile(derived.trend,0.975),
-                                  
-                                  mean.trend.500 = quantile(out$sims.list$log.trend,0.5),
-                                  mean.trend.025 = quantile(out$sims.list$log.trend,0.025),
-                                  mean.trend.975 = quantile(out$sims.list$log.trend,0.975),
-                                  
-                                  n.chains = out$mcmc.info$n.chains,
-                                  n.samples = out$mcmc.info$n.samples,
-                                  max.Rhat = max(unlist(out$Rhat),na.rm=TRUE),
-                                  Rhat.1.1 = mean(unlist(out$Rhat)>1.1,na.rm=TRUE))
-    
-    results_summary = rbind(results_summary, N_annual_station)
-  }
-  
-}
-
-head(results_summary)
-
-# Convergence statistics for each station
-aggregate(max.Rhat ~ station + season, data = results_summary, FUN = mean)
-aggregate(Rhat.1.1 ~ station + season, data = results_summary, FUN = mean)
-
-# Remove trends for stations that did not converge
-max.Rhat.stations <- aggregate(max.Rhat ~ station + season, data = results_summary, FUN = mean)
-results_summary <- subset(results_summary, station %in% subset(max.Rhat.stations, max.Rhat <= 1.10)$station)
+# #******************************************************************************************************************************************
+# #******************************************************************************************************************************************
+# # PART 5: PLOT RESULTS
+# #******************************************************************************************************************************************
+# #******************************************************************************************************************************************
+# rm(list=setdiff(ls(), c("dat_combined")))
+# 
+# station_season_combinations = unique(dat_combined[,c("station","season")])
+# 
+# results_summary = data.frame()
+# for (i in 1:nrow(station_season_combinations)){
+#   
+#   dat = subset(dat_combined, station == station_season_combinations$station[i] & season == station_season_combinations$season[i])
+#   
+#   dat$doy_adjusted = dat$doy - min(dat$doy) + 1
+#   dat$year_adjusted = dat$YearCollected - min(dat$YearCollected) + 1
+#   dat = subset(dat, !is.na(ObservationCount))
+#   
+#   jags.data = list(daily.count = dat$ObservationCount,
+#                    nobs = nrow(dat),
+#                    
+#                    area = dat$area,
+#                    narea = max(dat$area),
+#                    
+#                    day = dat$doy_adjusted,
+#                    nday = max(dat$doy_adjusted),
+#                    
+#                    year = dat$year_adjusted,
+#                    nyear = max(dat$year_adjusted),
+#                    
+#                    upper_limit = max(aggregate(ObservationCount~year_adjusted + area, data = dat, FUN = sum)$ObservationCount)*5,
+#                    
+#                    log.offset = log(dat$net.hrs),
+#                    pi = pi)
+#   
+#   file = paste0("./jags_output/",station_season_combinations$station[i],"_",station_season_combinations$season[i],"_randompeak.RData")
+#   
+#   if (file.exists(file)){
+#     load(file = file)
+#     
+#     derived.trend = (log(out$sims.list$N.total[,ncol(out$sims.list$N.total)]) - log(out$sims.list$N.total[,1])) / (ncol(out$sims.list$N.total)-1)
+#     
+#     # Store time series of annual index estimates at this station
+#     N_annual_station = data.frame(station = dat$station[1],
+#                                   season = dat$season[1],
+#                                   
+#                                   year = (1:jags.data$nyear) + min(dat$YearCollected) - 1,
+#                                   
+#                                   index.500 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.500)),
+#                                   index.025 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.025)),
+#                                   index.975 = apply(out$sims.list$N.total,2,function(x) quantile(x,0.975)),
+#                                   
+#                                   index.500.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.500)),
+#                                   index.025.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.025)),
+#                                   index.975.rescaled = apply(out$sims.list$N.total/out$sims.list$N.total[,1],2,function(x) quantile(x,0.975)),
+#                                   
+#                                   
+#                                   derived.trend.500 = quantile(derived.trend,0.5),
+#                                   derived.trend.025 = quantile(derived.trend,0.025),
+#                                   derived.trend.975 = quantile(derived.trend,0.975),
+#                                   
+#                                   mean.trend.500 = quantile(out$sims.list$log.trend,0.5),
+#                                   mean.trend.025 = quantile(out$sims.list$log.trend,0.025),
+#                                   mean.trend.975 = quantile(out$sims.list$log.trend,0.975),
+#                                   
+#                                   n.chains = out$mcmc.info$n.chains,
+#                                   n.samples = out$mcmc.info$n.samples,
+#                                   max.Rhat = max(unlist(out$Rhat),na.rm=TRUE),
+#                                   Rhat.1.1 = mean(unlist(out$Rhat)>1.1,na.rm=TRUE))
+#     
+#     results_summary = rbind(results_summary, N_annual_station)
+#   }
+#   
+# }
+# 
+# head(results_summary)
+# 
+# # Convergence statistics for each station
+# aggregate(max.Rhat ~ station + season, data = results_summary, FUN = mean)
+# aggregate(Rhat.1.1 ~ station + season, data = results_summary, FUN = mean)
+# 
+# # Remove trends for stations that did not converge
+# max.Rhat.stations <- aggregate(max.Rhat ~ station + season, data = results_summary, FUN = mean)
+# results_summary <- subset(results_summary, station %in% subset(max.Rhat.stations, max.Rhat <= 1.10)$station)
