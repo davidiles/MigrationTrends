@@ -269,7 +269,7 @@ cmmn_coordinates <- read.csv("../data/locations/CMMN_locations.csv")
 colnames(cmmn_coordinates) <- c("results_code","station","name","statprov_code","lat","lon")
 cmmn_coordinates$station <- as.character(cmmn_coordinates$station)
 
-# Coordinates of migration stations
+# Coordinates of US migration stations
 station_coordinates <- rbind(data.frame(station = "MCCS", lat = 41.91, lon = -70.54),
                              data.frame(station = "AIMS", lat = 42.99, lon = -70.61),
                              data.frame(station = "KWRS", lat = 41.48, lon = -71.53),

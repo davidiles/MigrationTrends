@@ -34,39 +34,22 @@ map.BCR <- ggplot() +   theme_bw() +
   geom_sf_text(data = bcr2, aes(label = BCR), size = 2, col = "black")
 
 #------------------------------
-# Define "western range"
+# Define discrete range zones
 #------------------------------
 
-bcr2$range = 0
+bcr2$range = "South"
 bcr2$range[bcr2$PROVINCE_S %in% c("ALASKA","YUKON","BRITISH COLUMBIA","ALBERTA","SASKATCHEWAN","NORTHWEST TERRITORIES")] = "West"
+bcr2$range[bcr2$PROVINCE_S %in% c("NUNAVUT","MANITOBA","ONTARIO")] = "Central"
+bcr2$range[bcr2$range == "South" & bcr2$COUNTRY == "CANADA"] = "East"
+bcr2$range = factor(bcr2$range, levels = c("West","Central","East","South"))
 
-map.BCR.west <- ggplot() +   theme_bw() +
-  geom_sf(data = bcr2, aes(fill = factor(origin.west)), col = "gray92")
+col.pal <- RColorBrewer::brewer.pal(length(unique(bcr2$range)),"Set2")
+col.pal[4] <- "gray90"
 
-map.BCR.west
-
-#------------------------------
-# Define "central range"
-#------------------------------
-
-bcr2$origin.central = 0
-bcr2$origin.central[bcr2$PROVINCE_S %in% c("NUNAVUT","MANITOBA","ONTARIO")] = 1
-
-map.BCR.central <- ggplot() +   theme_bw() +
-  geom_sf(data = bcr2, aes(fill = factor(origin.central)), col = "gray92")
-
-map.BCR.central
-
-#------------------------------
-# Define "eastern range"
-#------------------------------
-
-bcr2$origin.eastern = 0
-bcr2$origin.eastern[bcr2$origin.west == 0 & bcr2$origin.central == 0 & bcr2$COUNTRY == "CANADA"] = 1
-
-map.BCR.eastern <- ggplot() +   theme_bw() +
-  geom_sf(data = bcr2, aes(fill = factor(origin.eastern)), col = "gray92")
-
-map.BCR.eastern
+map.BCR.range <- ggplot() +   theme_bw() +
+  geom_sf(data = bcr2, aes(fill = range), col = "gray95")+
+  scale_fill_manual(values=col.pal)
+   
+map.BCR.range
 
 
