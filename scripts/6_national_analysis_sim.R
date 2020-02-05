@@ -431,7 +431,7 @@ for (iteration in 1:100){
   rho[3,5] = runif(1,0.005,0.015)
   rho[3,6] = runif(1,0.005,0.015)
   
-  rho[rho == 0] = runif(length(rho[rho == 0]),0,0.001)
+  #rho[rho == 0] = runif(length(rho[rho == 0]),0,0.001)
   
   # Regional dynamics
   proc.sd = 0.2
@@ -564,24 +564,25 @@ for (iteration in 1:100){
       # Estimate totals at each station each year
       #---------------------------------------------
       
-      mean.migrate ~ dunif(1,nday)
-      sd.migrate ~ dunif(0,20)
-      
-      daily.noise.sd ~ dunif(0,2)
-      daily.noise.tau <- pow(daily.noise.sd,-2)
-      
       for (s in 1:nstation){
+      
+        mean.migrate[s] ~ dunif(1,nday)
+        sd.migrate[s] ~ dunif(0,20)
+      
+        daily.noise.sd[s] ~ dunif(0,2)
+        daily.noise.tau[s] <- pow(daily.noise.sd[s],-2)
+      
         for (y in 1:nyear){
           for (d in 1:nday){
             
-            norm.density[d,s,y] <- 1/(sqrt(2*pi)*sd.migrate)*
-                exp(-((d-mean.migrate)^2/(2*sd.migrate^2)))
+            norm.density[d,s,y] <- 1/(sqrt(2*pi)*sd.migrate[s])*
+                exp(-((d-mean.migrate[s])^2/(2*sd.migrate[s]^2)))
             
             # Expected count on each day
             expected.count[d,s,y] <- norm.density[d,s,y] * true.total[s,y] * exp(log.offset)
             
             # Daily observation error
-            daily.noise[d,s,y] ~ dnorm(0,daily.noise.tau)
+            daily.noise[d,s,y] ~ dnorm(0,daily.noise.tau[s])
             
             lambda[d,s,y] <- exp(log(expected.count[d,s,y]) + daily.noise[d,s,y])
             daily.count[d,s,y] ~ dpois(lambda[d,s,y])
@@ -656,9 +657,9 @@ for (iteration in 1:100){
   inits <- function() list(trend = region.trend,
                            rho.variable = rho,
                            proc.sd = proc.sd,
-                           mean.migrate = mean.migrate,
-                           sd.migrate = sd.migrate,
-                           daily.noise.sd = daily.noise.sd)
+                           mean.migrate = rep(mean.migrate,nstation),
+                           sd.migrate = rep(sd.migrate,nstation),
+                           daily.noise.sd = rep(daily.noise.sd,nstation))
   
   out <- jags(data = jags.data,
               model.file = "cmmn_part2.jags",

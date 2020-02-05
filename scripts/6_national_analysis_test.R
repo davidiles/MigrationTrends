@@ -77,10 +77,10 @@ bcr2$region = factor(bcr2$region, levels = c("West","Central","East","South"))
 col_pal <- RColorBrewer::brewer.pal(length(unique(bcr2$region)),"Set2")
 col_pal[4] <- "gray90"
 
-# map_BCR_region <- ggplot() +   theme_bw() +
-#   geom_sf(data = bcr2, aes(fill = region), col = "gray95")+
-#   scale_fill_manual(values=col_pal)
-# print(map_BCR_region)
+map_BCR_region <- ggplot() +   theme_bw() +
+  geom_sf(data = bcr2, aes(fill = region), col = "gray95")+
+  scale_fill_manual(values=col_pal)
+print(map_BCR_region)
 
 #--------------------------------------------------------------------
 # Merge polygons based on "region"
@@ -166,10 +166,11 @@ station_sf <-  st_as_sf(na.omit(station_coordinates), coords = c("lon", "lat"),c
 
 
 
-west_fall <- data.frame(station = c("CFMS",  # Creamer's field migration station
-                                    "TLBBS"), # Teslin Lake
+west_fall <- data.frame(station = c("CFMS"  # Creamer's field migration station
+                                    #"TLBBS"), # Teslin Lake
                                     #"MNO",   # Mackenzie nature observatory
                                     #"LMBO"),  # Last Mountain Bird Observatory
+),
                         region = "West")
 
 central_fall <- data.frame(station = c("MCCS"), # Manomet
@@ -187,13 +188,13 @@ station_sf <- full_join(station_sf, station_regions)
 station_sf <- na.omit(station_sf)
 
 
-# analysis_site_map <- map_BCR_region +
-#   #geom_sf(data = station_sf, size = 2, shape = 1) +
-#   geom_sf_text(data = na.omit(station_sf), 
-#                aes(label = station), size = 2, col = "black") +
-#   ggtitle("Sites with fall counts")
-# 
-# print(analysis_site_map)
+analysis_site_map <- map_BCR_region +
+  #geom_sf(data = station_sf, size = 2, shape = 1) +
+  geom_sf_text(data = na.omit(station_sf),
+               aes(label = station), size = 2, col = "black") +
+  ggtitle("Sites with fall counts")
+
+print(analysis_site_map)
 
 #-------------------------------------------------------------------------------------------------------
 # Part 5: Package data for analysis
@@ -225,8 +226,8 @@ count_df = subset(count_df, !is.na(ObservationCount))
 # Number of individuals arriving at each station, in each year, from each region
 N.isotope <- array(NA, dim = c(region = max(region_abund_df$region_number),station = max(location_df$station_number),year = max(count_df$year_adjusted)))
 for (s in location_df$station_number){
-    N.isotope[,s,1] <- rep(0,max(region_abund_df$region_number)) # zero counts
-    N.isotope[location_df$region_number[which(location_df$station_number == s)],s,1] <- 25
+    N.isotope[,s,5] <- rep(0,max(region_abund_df$region_number)) # zero counts
+    N.isotope[location_df$region_number[which(location_df$station_number == s)],s,5] <- 25
 }
 
 # Matrix to contain number of birds sampled in each year at each station (fills in numbers for years with no data)
@@ -237,6 +238,7 @@ jags.data = list(
   
   # Regional regions and initial abundances
   nregion = length(unique(count_df$region)),
+  
   logN0 = rep(log(1),3), #log(region_abund_df$abund),
   
   # Number of stations in dataset
