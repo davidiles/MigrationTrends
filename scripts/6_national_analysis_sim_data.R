@@ -28,119 +28,66 @@ rm(list=ls())
 # Read in seasonal counts at stations
 #--------------------------------------------------------------------
 #--------------------------------------------------------------------
+nregion = 3
 
 # Read in data and subset to Fall (for demonstration)
 dat_combined <- read.csv("./processed_data/dat_combined.csv")
 dat_combined <- subset(dat_combined, season == "Fall")
 
-stations_to_keep <- c("CFMS","MGBO","MCCS")
-dat_combined <- subset(dat_combined, station %in% stations_to_keep)
+stations_to_keep <- c("LPBO","MGBO","MCCS","PEPBO")
+dat_combined <- subset(dat_combined, station %in% stations_to_keep & area == 1)
+
 
 min_date <- min(dat_combined$doy, na.rm = TRUE)
 min_year <- min(dat_combined$YearCollected, na.rm = TRUE)
 
 dat_combined$doy_adj <- dat_combined$doy - min_date + 1
 dat_combined$year_adj <- dat_combined$YearCollected - min_year + 1
+dat_combined$station_number <- as.numeric(factor(dat_combined$station, levels = stations_to_keep))
 
-dat_combined$station_number <- as.numeric(factor(dat_combined$station))
-
-# Create a nday x nstation x nyear array to store daily counts
-
-
-
-nregion = 3
-nyear = 10
-nday = 30
-
-mean.migrate <- 15 #peak migration occurs on day 15
-sd.migrate <- 5    #migration window has a normal shape, with sd of 6 days (95% of migration occurs in 20 day window)
-daily.noise.sd <- 0.1
-
-#---------------------------------------
-# Simulate dynamics
-#---------------------------------------
-
-region.abund = rep(1,nregion)
-region.trend = seq(-0.1,0.1, length.out = nregion)
-
-# Assume there are at least 2 stations primarily monitoring each region
-rho = matrix(0,nrow=nregion, ncol = nstation) #FROM region TO station
-
-rho[1,1] = runif(1,0.005,0.015)
-rho[1,2] = runif(1,0.005,0.015)
-rho[2,3] = runif(1,0.005,0.015)
-rho[2,4] = runif(1,0.005,0.015)
-rho[3,5] = runif(1,0.005,0.015)
-rho[3,6] = runif(1,0.005,0.015)
-
-#rho[rho == 0] = runif(length(rho[rho == 0]),0,0.001)
-
-# Regional dynamics
-proc.sd = 0.2
-
-N.matrix = matrix(NA, nrow = nregion, ncol = nyear) # Relative abundance in each year in each region
-mu = array(NA, dim = c(nregion, nstation, nyear)) # Counts arriving at each station in each year from each region
-
-for (r in 1:nregion){
-  
-  for (y in 1:nyear){
-    N.matrix[r,y] = exp(log(region.abund[r]) + region.trend[r]*(y-1) + rnorm(1,0,proc.sd))
-    
-    for (s in 1:nstation){
-      mu[r,s,y] = N.matrix[r,y]*rho[r,s]
+nday <- max(dat_combined$doy_adj)
+nstation <- max(dat_combined$station_number)
+nyear <- max(dat_combined$year_adj)
       
-    }
-    
-  }
-}
+#-------------------------
+unique(dat_combined[,c("station","station_number")]) %>% arrange(. , station_number)
+#-------------------------
 
-mu.matrix = apply(mu,c(2,3), FUN = sum)
+# Create a nday x nstation x nyear array to store daily counts and effort offsets
+daily.count <- array(NA, dim = c(nday,nstation,nyear))
+daily.offsets <- array(NA, dim = c(nday,nstation,nyear))
+
+
+for (i in 1:nrow(dat_combined)){
+  daily.count[dat_combined$doy_adj[i],dat_combined$station_number[i],dat_combined$year_adj[i]] = dat_combined$ObservationCount[i]
+  daily.offsets[dat_combined$doy_adj[i],dat_combined$station_number[i],dat_combined$year_adj[i]] = dat_combined$net.hrs[i]
+  
+  }
+daily.offsets[is.na(daily.offsets)] <- median(daily.offsets, na.rm=TRUE)
+
+mean(daily.count / daily.offsets, na.rm = TRUE)
+
+# Plausible values of rho (per season)
+rho.daily = daily.count / daily.offsets
+
 
 #********************
 # Isotope sampling
 #********************
 
-N.isotope = mu * NA
+N.isotope = array(0, dim = c(nregion,nstation,nyear))
 
-for (y in 1:nyear){
-  for (s in 1:nstation){
-    N.isotope[,s,y] = rmultinom(1,25, mu[,s,y])
-  }
-}
-N.station.sampled = apply(N.isotope,c(2,3), sum) #How many birds were sampled at each station in each year
+#Station 1 gets birds from region 1
+N.isotope[1,1,] = 25
+N.isotope[1,2,] = 25
+N.isotope[2,3,] = 25
+N.isotope[3,4,] = 25
 
-# Remove all isotope data except for first year
+# Remove all isotope data except for 5th year
 N.isotope[,1:nstation,1:4] = NA
 N.isotope[,1:nstation,6:nyear] = NA
 
-#********************
-# Seasonal totals at each station (effort offset and poisson error)
-#********************
-
-log.offset <- log(10000)
-
-#********************
-#********************
-# Distribute seasonal total across season
-#********************
-#********************
-
-#daily proportion of total seasonal count that passes each station
-migration.density <- dnorm(1:nday, mean = mean.migrate, sd = sd.migrate)
-
-daily.expected.count <- array(NA, dim=c(nday,nstation,nyear))
-daily.count <- array(NA, dim=c(nday,nstation,nyear))
-
-for (d in 1:nday){
-  for (s in 1:nstation){
-    for (y in 1:nyear){
-      
-      daily.expected.count[d,s,y] <- mu.matrix[s,y] * exp(log.offset) * migration.density[d]
-      daily.noise <- rnorm(1,0,daily.noise.sd)
-      daily.count[d,s,y] <- rpois(1,exp( log(daily.expected.count[d,s,y]) + daily.noise))
-    }
-  }
-}
+N.station.sampled <- array(25, dim = c(nstation,nyear))
 
 
 sink("cmmn_part2.jags")
@@ -153,20 +100,20 @@ cat("
       #---------------------------------------------
  
       for (r in 1:nregion){
-        trend[r] ~ dnorm(0,0.01) # Regional trends
+        trend[r] ~ dnorm(0,0.1) # Regional trends
       }
       
       # Temporal variance in trend
-      proc.sd ~ dunif(0,2)
-      proc.tau <- pow(proc.sd,-2)
+      #proc.sd ~ dunif(0,2)
+      #proc.tau <- pow(proc.sd,-2)
       
       # True (unobserved) population dynamics in each region
       for (y in 1:nyear){
         for (r in 1:nregion){
         
           # Exponential population model
-          logN[r,y] <- logN0[r] + trend[r] * (y-1) + noise[r,y]
-          noise[r,y] ~ dnorm(0,proc.tau)
+          logN[r,y] <- logN0[r] + trend[r] * (y-1) #+ noise[r,y]
+          #noise[r,y] ~ dnorm(0,proc.tau)
           N[r,y] <- exp(logN[r,y])
         }
       }
@@ -179,7 +126,7 @@ cat("
       # captured by station [s] (constant through time)
        for (r in 1:nregion){
          for (s in 1:nstation){
-           rho.variable[r,s] ~ dunif(0,1) 
+           rho.variable[r,s] ~ dgamma(0.001,0.001) 
            rho[r,s] <- rho.variable[r,s] * rho.fix[r,s]
         }
        }
@@ -190,7 +137,8 @@ cat("
           for (r in 1:nregion){
           
             # Seasonal total arriving at station [s] from region [r]
-            mu[r,s,y] <- N[r,y] * rho[r,s]    
+            mu[r,s,y] <- N[r,y] * rho[r,s]
+            
           }
         
           # Total seasonal count at station [s]
@@ -209,7 +157,7 @@ cat("
       for (s in 1:nstation){
       
         mean.migrate[s] ~ dunif(1,nday)
-        sd.migrate[s] ~ dunif(0,20)
+        sd.migrate[s] ~ dunif(0,nday/2)
       
         daily.noise.sd[s] ~ dunif(0,2)
         daily.noise.tau[s] <- pow(daily.noise.sd[s],-2)
@@ -221,7 +169,7 @@ cat("
                 exp(-((d-mean.migrate[s])^2/(2*sd.migrate[s]^2)))
             
             # Expected count on each day
-            expected.count[d,s,y] <- norm.density[d,s,y] * true.total[s,y] * exp(log.offset)
+            expected.count[d,s,y] <- norm.density[d,s,y] * true.total[s,y] * exp(log.offset[d,s,y])
             
             # Daily observation error
             daily.noise[d,s,y] ~ dnorm(0,daily.noise.tau[s])
@@ -265,7 +213,7 @@ parameters.to.save = c("trend",
 #************************************
 # Package data for analysis
 #************************************
-rho.fix <- (rho > 0)*1
+rho.fix <- matrix(0, nrow = nregion, ncol = nstation)
 
 rho.fix <- (apply(N.isotope,c(1,2),sum, na.rm = TRUE) > 0) * 1 #In cases where a transition was never observed, fix it to zero
 
@@ -273,7 +221,7 @@ jags.data = list(
   
   # Regional regions and initial abundances
   nregion = nregion,
-  logN0 = log(region.abund),
+  logN0 = rep(0,nregion),
   
   # Number of stations in dataset
   nstation = nstation,
@@ -290,18 +238,14 @@ jags.data = list(
   
   daily.count = daily.count,
   
-  log.offset = log.offset,
+  log.offset = log(daily.offsets),
   pi = pi,
   
   rho.fix = rho.fix #Can set certain transitions to zero if necessary
 )
 
-inits <- function() list(trend = region.trend,
-                         rho.variable = rho,
-                         proc.sd = proc.sd,
-                         mean.migrate = rep(mean.migrate,nstation),
-                         sd.migrate = rep(sd.migrate,nstation),
-                         daily.noise.sd = rep(daily.noise.sd,nstation))
+inits <- function() list(trend = rep(0,nregion),
+                         rho.variable = matrix(mean(apply(rho.daily,c(2,3),sum, na.rm=TRUE)),nrow = nregion, ncol = nstation))
 
 out <- jags(data = jags.data,
             model.file = "cmmn_part2.jags",
@@ -309,8 +253,11 @@ out <- jags(data = jags.data,
             inits = inits,
             n.chains = 2,
             n.thin = 5,
-            n.iter = 25000,
-            n.burnin = 10000)
+            n.iter = 50000,
+            n.burnin = 20000)
+
+print(out)
+
 
 # par(mfrow=c(3,1))
 # # Station total estimates
@@ -341,6 +288,7 @@ out <- jags(data = jags.data,
 # 
 # par(mfrow=c(1,1))
 # 
+
 
 #Relevant quantities to check
 

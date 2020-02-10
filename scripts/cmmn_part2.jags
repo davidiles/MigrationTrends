@@ -11,16 +11,16 @@
       }
       
       # Temporal variance in trend
-      proc.sd ~ dunif(0,2)
-      proc.tau <- pow(proc.sd,-2)
+      #proc.sd ~ dunif(0,2)
+      #proc.tau <- pow(proc.sd,-2)
       
       # True (unobserved) population dynamics in each region
       for (y in 1:nyear){
         for (r in 1:nregion){
         
           # Exponential population model
-          logN[r,y] <- logN0[r] + trend[r] * (y-1) + noise[r,y]
-          noise[r,y] ~ dnorm(0,proc.tau)
+          logN[r,y] <- logN0[r] + trend[r] * (y-1) #+ noise[r,y]
+          #noise[r,y] ~ dnorm(0,proc.tau)
           N[r,y] <- exp(logN[r,y])
         }
       }
@@ -33,8 +33,8 @@
       # captured by station [s] (constant through time)
        for (r in 1:nregion){
          for (s in 1:nstation){
-           rho.variable[r,s] ~ dunif(0,1) 
-           rho[r,s] <- rho.variable[r,s] * rho.fix[r,s]
+           rho.variable[r,s] ~ dgamma(1,1) #dunif(0,1) 
+           rho[r,s] <- rho.variable[r,s] #* rho.fix[r,s]
         }
        }
       

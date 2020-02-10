@@ -399,13 +399,13 @@ rm(list=ls())
 #--------------------------------------------------------------------
 
 nregion = 3
-nstation = 6
+nstation = 3
 nyear = 10
 nday = 30
 
 mean.migrate <- 15 #peak migration occurs on day 15
 sd.migrate <- 5    #migration window has a normal shape, with sd of 6 days (95% of migration occurs in 20 day window)
-daily.noise.sd <- 0.1
+daily.noise.sd <- 0.8
 
 #---------------------------------------
 # Simulate dynamics
@@ -413,7 +413,7 @@ daily.noise.sd <- 0.1
 
 results.summary = data.frame()
 
-for (iteration in 1:100){
+for (iteration in 1:1000){
   
   seed = round(runif(1,1,1000))
   set.seed(seed)
@@ -422,19 +422,19 @@ for (iteration in 1:100){
   region.trend = seq(-0.1,0.1, length.out = nregion)
   
   # Assume there are at least 2 stations primarily monitoring each region
-  rho = matrix(0,nrow=nregion, ncol = nstation) #FROM region TO station
-  
-  rho[1,1] = runif(1,0.005,0.015)
-  rho[1,2] = runif(1,0.005,0.015)
-  rho[2,3] = runif(1,0.005,0.015)
-  rho[2,4] = runif(1,0.005,0.015)
-  rho[3,5] = runif(1,0.005,0.015)
-  rho[3,6] = runif(1,0.005,0.015)
+  rho = matrix(runif(nregion*nstation,0,0.001),nrow=nregion, ncol = nstation) #FROM region TO station
+  diag(rho) <- 0.01
+  #rho[1,1] = runif(1,0.005,0.015)
+  #rho[1,2] = runif(1,0.005,0.015)
+  #rho[2,3] = runif(1,0.005,0.015)
+  #rho[2,4] = runif(1,0.005,0.015)
+  #rho[3,5] = runif(1,0.005,0.015)
+  #rho[3,6] = runif(1,0.005,0.015)
   
   #rho[rho == 0] = runif(length(rho[rho == 0]),0,0.001)
   
   # Regional dynamics
-  proc.sd = 0.2
+  proc.sd = 0 #.5
   
   N.matrix = matrix(NA, nrow = nregion, ncol = nyear) # Relative abundance in each year in each region
   mu = array(NA, dim = c(nregion, nstation, nyear)) # Counts arriving at each station in each year from each region
@@ -475,7 +475,7 @@ for (iteration in 1:100){
   # Seasonal totals at each station (effort offset and poisson error)
   #********************
   
-  log.offset <- log(10000)
+  log.offset <- log(100000)
 
   #********************
   #********************
@@ -500,6 +500,10 @@ for (iteration in 1:100){
     }
   }
   
+  #seasonal total counts
+  apply(daily.count,c(2,3), FUN = sum)
+  
+  #plot(daily.count[,1,10], type = "l") #Examine daily count plots
   
   sink("cmmn_part2.jags")
   cat("
@@ -515,16 +519,16 @@ for (iteration in 1:100){
       }
       
       # Temporal variance in trend
-      proc.sd ~ dunif(0,2)
-      proc.tau <- pow(proc.sd,-2)
+      #proc.sd ~ dunif(0,2)
+      #proc.tau <- pow(proc.sd,-2)
       
       # True (unobserved) population dynamics in each region
       for (y in 1:nyear){
         for (r in 1:nregion){
         
           # Exponential population model
-          logN[r,y] <- logN0[r] + trend[r] * (y-1) + noise[r,y]
-          noise[r,y] ~ dnorm(0,proc.tau)
+          logN[r,y] <- logN0[r] + trend[r] * (y-1) #+ noise[r,y]
+          #noise[r,y] ~ dnorm(0,proc.tau)
           N[r,y] <- exp(logN[r,y])
         }
       }
@@ -537,8 +541,8 @@ for (iteration in 1:100){
       # captured by station [s] (constant through time)
        for (r in 1:nregion){
          for (s in 1:nstation){
-           rho.variable[r,s] ~ dunif(0,1) 
-           rho[r,s] <- rho.variable[r,s] * rho.fix[r,s]
+           rho.variable[r,s] ~ dgamma(1,1) #dunif(0,1) 
+           rho[r,s] <- rho.variable[r,s] #* rho.fix[r,s]
         }
        }
       
@@ -606,7 +610,7 @@ for (iteration in 1:100){
   
   
   parameters.to.save = c("trend",
-                         "proc.sd",
+                         #"proc.sd",
                          
                          "rho",
                          
@@ -667,7 +671,7 @@ for (iteration in 1:100){
               inits = inits,
               n.chains = 2,
               n.thin = 5,
-              n.iter = 25000,
+              n.iter = 20000,
               n.burnin = 10000)
   
   # par(mfrow=c(3,1))
