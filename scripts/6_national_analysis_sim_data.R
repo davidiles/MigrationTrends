@@ -34,9 +34,24 @@ nregion = 3
 dat_combined <- read.csv("./processed_data/dat_combined.csv")
 dat_combined <- subset(dat_combined, season == "Fall")
 
-stations_to_keep <- c("LPBO","MGBO","MCCS","PEPBO")
+stations_to_keep <- c(
+  #West
+  "CFMS",
+  "TLBBS",
+  "MNO",
+  "LMBO",
+  
+  #Central
+  "PEPBO",
+  "BPBO",
+  "PIBO",
+  
+  #East
+  "MGBO", # McGill
+  "MCCS", # Manomet
+  "KWRS", # Kingston
+  "BIBS")
 dat_combined <- subset(dat_combined, station %in% stations_to_keep & area == 1)
-
 
 min_date <- min(dat_combined$doy, na.rm = TRUE)
 min_year <- min(dat_combined$YearCollected, na.rm = TRUE)
@@ -70,24 +85,69 @@ mean(daily.count / daily.offsets, na.rm = TRUE)
 # Plausible values of rho (per season)
 rho.daily = daily.count / daily.offsets
 
+apply(rho.daily,2,mean, na.rm = TRUE) * dim(rho.daily)[1]
 
 #********************
 # Isotope sampling
 #********************
 
+# [From region, to station, in year]
 N.isotope = array(0, dim = c(nregion,nstation,nyear))
 
-#Station 1 gets birds from region 1
+#-----------
+# Region 1: Western stations
+#-----------
+#"CFMS"
 N.isotope[1,1,] = 25
+
+#"TLBBS"
 N.isotope[1,2,] = 25
-N.isotope[2,3,] = 25
-N.isotope[3,4,] = 25
+
+#"MNO"
+N.isotope[1,3,] = 25
+
+#"LMBO"
+N.isotope[1,4,] = 25
+
+#-----------
+# Region 2: Central stations
+#-----------
+
+#"PEPBO"
+N.isotope[1,5,] = 5
+N.isotope[2,5,] = 10
+N.isotope[3,5,] = 10
+
+#"BPBO"
+N.isotope[1,6,] = 5
+N.isotope[2,6,] = 20
+
+#"PIBO"
+N.isotope[2,7,] = 25
+
+#-----------
+# Region 3: Eastern stations
+#-----------
+#"MGBO"
+N.isotope[3,8,] = 25
+
+#"MCCS"
+N.isotope[2,9,] = 5
+N.isotope[3,9,] = 20
+
+#"KWRS"
+N.isotope[3,10,] = 5
+N.isotope[3,10,] = 20
+
+#"BIBS
+N.isotope[2,11,] = 10
+N.isotope[3,11,] = 15
+
+N.station.sampled <- apply(N.isotope, c(2,3), FUN = sum) # Number of birds sampled each year
 
 # Remove all isotope data except for 5th year
 N.isotope[,1:nstation,1:4] = NA
 N.isotope[,1:nstation,6:nyear] = NA
-
-N.station.sampled <- array(25, dim = c(nstation,nyear))
 
 
 sink("cmmn_part2.jags")
@@ -103,17 +163,12 @@ cat("
         trend[r] ~ dnorm(0,0.1) # Regional trends
       }
       
-      # Temporal variance in trend
-      #proc.sd ~ dunif(0,2)
-      #proc.tau <- pow(proc.sd,-2)
-      
       # True (unobserved) population dynamics in each region
       for (y in 1:nyear){
         for (r in 1:nregion){
         
           # Exponential population model
-          logN[r,y] <- logN0[r] + trend[r] * (y-1) #+ noise[r,y]
-          #noise[r,y] ~ dnorm(0,proc.tau)
+          logN[r,y] <- logN0[r] + trend[r] * (y-1)
           N[r,y] <- exp(logN[r,y])
         }
       }
@@ -126,7 +181,7 @@ cat("
       # captured by station [s] (constant through time)
        for (r in 1:nregion){
          for (s in 1:nstation){
-           rho.variable[r,s] ~ dgamma(0.001,0.001) 
+           rho.variable[r,s] ~ dunif(0,10) 
            rho[r,s] <- rho.variable[r,s] * rho.fix[r,s]
         }
        }
@@ -137,8 +192,7 @@ cat("
           for (r in 1:nregion){
           
             # Seasonal total arriving at station [s] from region [r]
-            mu[r,s,y] <- N[r,y] * rho[r,s]
-            
+            mu[r,s,y] <- N[r,y] * rho[r,s]    
           }
         
           # Total seasonal count at station [s]
@@ -157,7 +211,7 @@ cat("
       for (s in 1:nstation){
       
         mean.migrate[s] ~ dunif(1,nday)
-        sd.migrate[s] ~ dunif(0,nday/2)
+        sd.migrate[s] ~ dunif(0,20)
       
         daily.noise.sd[s] ~ dunif(0,2)
         daily.noise.tau[s] <- pow(daily.noise.sd[s],-2)
@@ -196,7 +250,7 @@ sink()
 
 
 parameters.to.save = c("trend",
-                       "proc.sd",
+                       #"proc.sd",
                        
                        "rho",
                        
@@ -213,8 +267,6 @@ parameters.to.save = c("trend",
 #************************************
 # Package data for analysis
 #************************************
-rho.fix <- matrix(0, nrow = nregion, ncol = nstation)
-
 rho.fix <- (apply(N.isotope,c(1,2),sum, na.rm = TRUE) > 0) * 1 #In cases where a transition was never observed, fix it to zero
 
 jags.data = list(
@@ -244,8 +296,12 @@ jags.data = list(
   rho.fix = rho.fix #Can set certain transitions to zero if necessary
 )
 
+
+rho.station.init = apply(rho.daily,2,mean, na.rm = TRUE) * dim(rho.daily)[1]
+rho.variable.init <- matrix(rep(rho.station.init,nstation),nrow = nregion,ncol = nstation, byrow = TRUE)
+
 inits <- function() list(trend = rep(0,nregion),
-                         rho.variable = matrix(mean(apply(rho.daily,c(2,3),sum, na.rm=TRUE)),nrow = nregion, ncol = nstation))
+                         rho.variable = rho.variable.init)
 
 out <- jags(data = jags.data,
             model.file = "cmmn_part2.jags",
@@ -253,8 +309,8 @@ out <- jags(data = jags.data,
             inits = inits,
             n.chains = 2,
             n.thin = 5,
-            n.iter = 50000,
-            n.burnin = 20000)
+            n.iter = 10000,
+            n.burnin = 5000)
 
 print(out)
 
