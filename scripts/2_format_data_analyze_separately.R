@@ -246,6 +246,30 @@ pdf(file = paste0(file = "../figures/data_summaries/USA_Fall_plot.pdf"), width =
 print(USA_Fall_plot )
 dev.off()
 
+#--------------------------------------------
+# Restrict analysis to sites with monitoring windows longer than 3 weeks
+#--------------------------------------------
+
+# Examine analysis windows (date ranges with observed counts)
+date_ranges_start <- aggregate(doy ~ YearCollected + season + station, data = na.omit(dat_combined[,c("YearCollected","season","station","doy","ObservationCount")]), FUN = min)
+date_ranges_end <- aggregate(doy ~ YearCollected + season + station, data = na.omit(dat_combined[,c("YearCollected","season","station","doy","ObservationCount")]), FUN = max)
+colnames(date_ranges_start)[4] <- "start"
+colnames(date_ranges_end)[4] <- "end"
+date_ranges <- merge(date_ranges_start, date_ranges_end, all = TRUE)
+date_ranges$window_length <- date_ranges$end - date_ranges$start
+
+#Median window length
+median_window_lengths <- aggregate(window_length ~ station + season, data = date_ranges, FUN = median)
+median_window_lengths$station_season <- paste0(median_window_lengths$station,"_",median_window_lengths$season)
+longer_than_3wks <- subset(median_window_lengths, window_length >= 21)
+
+dat_combined$station_season = paste0(dat_combined$station,"_",dat_combined$season)
+dat_combined <- subset(dat_combined, station_season %in% longer_than_3wks$station_season)
+#--------------------------------------------
+
+write.csv(dat_combined, file = "./processed_data/dat_combined.csv", row.names = FALSE)
+
+
 #******************************************************************************************************************************************
 #******************************************************************************************************************************************
 # PART 2: SET UP BAYESIAN ANALYSIS
@@ -385,127 +409,102 @@ cat("
     }
     ",fill = TRUE)
 sink()
-
-
-#--------------------------------------------
-# Restrict analysis to sites with monitoring windows longer than 3 weeks
-#--------------------------------------------
-
-# Examine analysis windows (date ranges with observed counts)
-date_ranges_start <- aggregate(doy ~ YearCollected + season + station, data = na.omit(dat_combined[,c("YearCollected","season","station","doy","ObservationCount")]), FUN = min)
-date_ranges_end <- aggregate(doy ~ YearCollected + season + station, data = na.omit(dat_combined[,c("YearCollected","season","station","doy","ObservationCount")]), FUN = max)
-colnames(date_ranges_start)[4] <- "start"
-colnames(date_ranges_end)[4] <- "end"
-date_ranges <- merge(date_ranges_start, date_ranges_end, all = TRUE)
-date_ranges$window_length <- date_ranges$end - date_ranges$start
-
-#Median window length
-median_window_lengths <- aggregate(window_length ~ station + season, data = date_ranges, FUN = median)
-median_window_lengths$station_season <- paste0(median_window_lengths$station,"_",median_window_lengths$season)
-longer_than_3wks <- subset(median_window_lengths, window_length >= 21)
-
-dat_combined$station_season = paste0(dat_combined$station,"_",dat_combined$season)
-dat_combined <- subset(dat_combined, station_season %in% longer_than_3wks$station_season)
-#--------------------------------------------
-
-write.csv(dat_combined, file = "./processed_data/dat_combined.csv", row.names = FALSE)
-
-# ******************************************************************************************************************************************
-# ******************************************************************************************************************************************
-# PART 3: RUN ANALYSIS
-# ******************************************************************************************************************************************
-# ******************************************************************************************************************************************
-
-numCores <- detectCores() # Detect number of cores on machine
-numCores <- numCores - 1  # Reserve 1 core for other tasks
-registerDoParallel(numCores) # Number of cores to use for parallel processing
-
-station_season_combinations = unique(dat_combined[,c("station","season")])
-
-allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list, .packages = c("jagsUI")) %dopar% {
-  
-  # allresults = foreach(i = (c(4,15,27,30)), .combine = list, .packages = c("jagsUI")) %dopar% {
-  # i = which(station_season_combinations$station == "MGBO" & station_season_combinations$season == "Spring")
-  
-    start_time <- Sys.time()
-  
-  dat = subset(dat_combined, station == station_season_combinations$station[i] & season == station_season_combinations$season[i])
-  
-  dat$doy_adjusted = dat$doy - min(dat$doy) + 1
-  dat$year_adjusted = dat$YearCollected - min(dat$YearCollected) + 1
-  dat = subset(dat, !is.na(ObservationCount))
-  
-  jags.data = list(daily.count = dat$ObservationCount,
-                   nobs = nrow(dat),
-                   
-                   area = dat$area,
-                   narea = max(dat$area),
-                   
-                   day = dat$doy_adjusted,
-                   nday = max(dat$doy_adjusted),
-                   
-                   year = dat$year_adjusted,
-                   nyear = max(dat$year_adjusted),
-                   
-                   upper_limit = max(aggregate(ObservationCount~year_adjusted + area, data = dat, FUN = sum)$ObservationCount)*10,
-                   
-                   log.offset = log(dat$net.hrs),
-                   pi = pi
-  )
-  
-  inits <- function() list(log.trend = rnorm(1,0,0.05),
-                           proc.sd = runif(1,0.1,0.5))
-  
-  parameters.to.save = c("log.trend",
-                         "proc.sd",
-                         
-                         "log.intercept",
-                         "daily.noise.sd",
-                         "mean.migrate.HYPERMEAN",
-                         "mean.migrate.HYPERSD",
-                         
-                         "mean.migrate",
-                         "sd.migrate",
-                         
-                         "expected.count",
-                         "mu",
-                         "N.total",
-                         "N"#,
-                         
-                         # Goodness of fit testing
-                         #"chi2.obs.1",
-                         #"chi2.sim.1"
-                         
-  )
-  
-  out <- jags(data = jags.data,
-              model.file = "cmmn_separate_randompeak.jags",
-              parameters.to.save = parameters.to.save,
-              inits = inits,
-              n.chains = 2,
-              n.thin = 100,
-              n.iter = 1000000,
-              n.burnin = 500000)
-  
-  # Optional code to automatically select suitable number of iterations to achieve convergence
-  # modelFit <- autorun.jags(model="cmmn_separate_randompeak.jags", 
-  #                          monitor=parameters.to.save, 
-  #                          data=jags.data, n.chains=3,
-  #                          method="parallel", 
-  #                          startburnin = 25000,
-  #                          psrf.target=1.02)
-  
-  max(unlist(out$Rhat),na.rm = TRUE)
-  mean(unlist(out$Rhat) > 1.10,na.rm = TRUE)
-  
-  end_time <- Sys.time()
-  run_time <- end_time - start_time
-  
-  save(out, file = paste0("./jags_output/",station_season_combinations$station[i],"_",station_season_combinations$season[i],"_randompeak.RData"))
-  
-  out
-  
-}
+# # ******************************************************************************************************************************************
+# # ******************************************************************************************************************************************
+# # PART 3: RUN ANALYSIS
+# # ******************************************************************************************************************************************
+# # ******************************************************************************************************************************************
+# 
+# numCores <- detectCores() # Detect number of cores on machine
+# numCores <- numCores - 1  # Reserve 1 core for other tasks
+# registerDoParallel(numCores) # Number of cores to use for parallel processing
+# 
+# station_season_combinations = unique(dat_combined[,c("station","season")])
+# 
+# allresults = foreach(i = (1:nrow(station_season_combinations)), .combine = list, .packages = c("jagsUI")) %dopar% {
+#   
+#   # allresults = foreach(i = (c(4,15,27,30)), .combine = list, .packages = c("jagsUI")) %dopar% {
+#   # i = which(station_season_combinations$station == "MGBO" & station_season_combinations$season == "Spring")
+#   
+#     start_time <- Sys.time()
+#   
+#   dat = subset(dat_combined, station == station_season_combinations$station[i] & season == station_season_combinations$season[i])
+#   
+#   dat$doy_adjusted = dat$doy - min(dat$doy) + 1
+#   dat$year_adjusted = dat$YearCollected - min(dat$YearCollected) + 1
+#   dat = subset(dat, !is.na(ObservationCount))
+#   
+#   jags.data = list(daily.count = dat$ObservationCount,
+#                    nobs = nrow(dat),
+#                    
+#                    area = dat$area,
+#                    narea = max(dat$area),
+#                    
+#                    day = dat$doy_adjusted,
+#                    nday = max(dat$doy_adjusted),
+#                    
+#                    year = dat$year_adjusted,
+#                    nyear = max(dat$year_adjusted),
+#                    
+#                    upper_limit = max(aggregate(ObservationCount~year_adjusted + area, data = dat, FUN = sum)$ObservationCount)*10,
+#                    
+#                    log.offset = log(dat$net.hrs),
+#                    pi = pi
+#   )
+#   
+#   inits <- function() list(log.trend = rnorm(1,0,0.05),
+#                            proc.sd = runif(1,0.1,0.5))
+#   
+#   parameters.to.save = c("log.trend",
+#                          "proc.sd",
+#                          
+#                          "log.intercept",
+#                          "daily.noise.sd",
+#                          "mean.migrate.HYPERMEAN",
+#                          "mean.migrate.HYPERSD",
+#                          
+#                          "mean.migrate",
+#                          "sd.migrate",
+#                          
+#                          "expected.count",
+#                          "mu",
+#                          "N.total",
+#                          "N"#,
+#                          
+#                          # Goodness of fit testing
+#                          #"chi2.obs.1",
+#                          #"chi2.sim.1"
+#                          
+#   )
+#   
+#   out <- jags(data = jags.data,
+#               model.file = "cmmn_separate_randompeak.jags",
+#               parameters.to.save = parameters.to.save,
+#               inits = inits,
+#               n.chains = 2,
+#               n.thin = 100,
+#               n.iter = 1000000,
+#               n.burnin = 500000)
+#   
+#   # Optional code to automatically select suitable number of iterations to achieve convergence
+#   # modelFit <- autorun.jags(model="cmmn_separate_randompeak.jags", 
+#   #                          monitor=parameters.to.save, 
+#   #                          data=jags.data, n.chains=3,
+#   #                          method="parallel", 
+#   #                          startburnin = 25000,
+#   #                          psrf.target=1.02)
+#   
+#   max(unlist(out$Rhat),na.rm = TRUE)
+#   mean(unlist(out$Rhat) > 1.10,na.rm = TRUE)
+#   
+#   end_time <- Sys.time()
+#   run_time <- end_time - start_time
+#   
+#   save(out, file = paste0("./jags_output/",station_season_combinations$station[i],"_",station_season_combinations$season[i],"_randompeak.RData"))
+#   
+#   out
+#   
+# }
 
 # #******************************************************************************************************************************************
 # #******************************************************************************************************************************************
