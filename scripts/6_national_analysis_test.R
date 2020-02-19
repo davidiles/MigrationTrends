@@ -69,8 +69,13 @@ bcr2 <- st_transform(bcr1, crs = lcc)
 
 # Discrete range regions 
 bcr2$region = "South"
-bcr2$region[bcr2$PROVINCE_S %in% c("ALASKA","YUKON","BRITISH COLUMBIA","ALBERTA","SASKATCHEWAN","NORTHWEST TERRITORIES")] = "West"
-bcr2$region[bcr2$PROVINCE_S %in% c("NUNAVUT","MANITOBA","ONTARIO")] = "Central"
+
+bcr2$region[bcr2$PROVINCE_S %in% c("NUNAVUT","SASKATCHEWAN","MANITOBA","ONTARIO","NORTHWEST TERRITORIES")] = "Central"
+
+bcr2$region[bcr2$PROVINCE_S %in% c("ALASKA","YUKON","BRITISH COLUMBIA","ALBERTA")] = "West"
+
+bcr2$region[bcr2$PROVINCE_S == "NORTHWEST TERRITORIES" & (bcr2$BCR == 6 | bcr2$BCR == 4)] = "West"
+
 bcr2$region[bcr2$region == "South" & bcr2$COUNTRY == "CANADA"] = "East"
 bcr2$region = factor(bcr2$region, levels = c("West","Central","East","South"))
 
@@ -182,9 +187,8 @@ analysis_site_map2 <- ggplot() +   theme_bw() +
   geom_sf_text(data = centroid_sf,
                aes(label = region, col = region), size = 5)+
   
-  geom_sf_text(data = na.omit(station_sf),
-               aes(label = station, col = region), size = 3) +
-  ggtitle("Sites with fall counts")
+  #geom_sf_text(data = na.omit(station_sf),aes(label = station, col = region), size = 3) +
+  ggtitle("Example of broad catchment zones")
 
 print(analysis_site_map2)
 
