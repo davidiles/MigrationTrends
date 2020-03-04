@@ -4,6 +4,7 @@
 *.Rhistory
 *.pdf
 /presentations/
+/to_collaborators/
 /scripts/old_scripts
 /scripts/jags_output
 *.csv
